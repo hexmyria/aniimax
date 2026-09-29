@@ -37,7 +37,8 @@ const dynamic = {
   'Side by side, touching.':'隙間なく横に並べます。','Not made by this plan':'このプランでは生産されません','An unknown error occurred.':'不明なエラーが発生しました。',
   'On: the plan goes for this':'オン：この項目を生産対象にします','Off: the plan ignores this':'オフ：この項目を生産対象から外します','no Aniipod Maker yet':'アニポッドメーカーがありません',
   'Failed to load the optimizer. Please refresh the page.':'最適化ツールを読み込めませんでした。ページを再読み込みしてください。','Pick a recipe from the list.':'一覧からレシピを選択してください。','Stop skipping':'除外を解除','Plans will go for the most coins.':'コインが最大になる計画を表示します。','never':'達成不可','have it':'所持済み','Profit':'利益',
-  'Can\'t make this? Skip it and plan again':'生産できない場合は除外して再計算','Not yet checked in game.':'ゲーム内未確認。'
+  'Can\'t make this? Skip it and plan again':'生産できない場合は除外して再計算','Not yet checked in game.':'ゲーム内未確認。',
+  'Sells directly':'直接売却','For the level-up':'レベルアップ用','Nothing it can make helps this plan':'この計画に役立つ生産品がありません','No further profitable use found':'これ以上の有益な用途がありません','This goal would take an unreasonably long time to reach.':'この目標の達成には非常に長い時間がかかります。'
 };
 
 const ui = {
@@ -137,6 +138,11 @@ function translateText(value) {
     .replace(/^Skipping (.+)\.$/, '除外中：$1。')
     .replace(/^Plan calculation failed: (.+)$/, '計画の計算に失敗しました：$1')
     .replace(/^The exact planner couldn\'t run(?: \((.+)\))?, so this plan comes from the backup planner and may not be the very best\. Reloading the page usually fixes this\.$/, (_, reason) => `厳密プランナーを実行できなかったため${reason ? `（${reason}）` : ''}、予備プランナーの計画を表示しています。最適解とは限りません。通常はページを再読み込みすると解消します。`)
+    .replace(/^Used for ([^;]+); the rest sells directly$/, '$1に使用し、残りは直接売却')
+    .replace(/^Used for ([^;]+); the rest goes to the level-up$/, '$1に使用し、残りはレベルアップ用')
+    .replace(/^Used for ([^;]+)/, '$1に使用')
+    .replace(/; takes turns with ([^;]+)/, '（$1と交互に生産）')
+    .replace(/; grown without ([^;]+) at ([\d.]+)% speed$/, '（$1なし・速度$2%で栽培）')
     .replace(/畑 and 林/g, '畑と林')
     .replace(/Aniimo/g, 'アニモ')
     .replace(/Aniipods?/g, 'アニポッド');
