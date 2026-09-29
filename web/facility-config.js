@@ -177,6 +177,20 @@ export const FACILITIES = [
     },
 ];
 
+// Display-only ordering inside each category. Level-up material processors are the most useful
+// reference points, while the two non-coin progression machines read more naturally at the end.
+// Facility IDs and the optimizer's data order remain unchanged.
+const DISPLAY_ORDER_OVERRIDES = new Map([
+    ['Chimney Kiln', -2],
+    ['Woodworking Bench', -1],
+    ['Aniipod Maker', FACILITIES.length + 1],
+    ['Dance Pad Polisher', FACILITIES.length + 2],
+]);
+
+export function facilityDisplayRank(name) {
+    return DISPLAY_ORDER_OVERRIDES.get(name) ?? FACILITIES.findIndex(f => f.name === name);
+}
+
 // Aniipod tiers in Aniipod Maker level order: each level adds a better one for catching Aniimo.
 // The "Most Aniipods" strategy makes only the best tier the player's Maker can reach.
 export const ANIIPOD_TIERS = ['aniipod', 'aniipod_pro', 'aniipod_mega'];

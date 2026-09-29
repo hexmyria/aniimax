@@ -4,7 +4,8 @@ import {
     FACILITIES, FACILITY_CATEGORIES, FACILITY_CATEGORY_BY_NAME,
     MAX_HOME_LEVEL, ANIIMO_MAX, simpleSetup,
     LEVEL_UP_COSTS, LEVEL_UP_CHAINS, SPECIAL_RECIPES, ANIIPOD_TIERS, personalityLetter, opposedPersonality,
-} from './facility-config.js';
+    facilityDisplayRank,
+} from './facility-config.js?v=order1';
 
 let wasmReady = false;
 
@@ -231,7 +232,8 @@ function renderTierRows(name) {
 function renderFacilityCards() {
     const grid = document.getElementById('facilities-grid');
     grid.innerHTML = FACILITY_CATEGORIES.map(category => {
-        const cards = FACILITIES.filter(f => f.category === category).map(f => `
+        const cards = FACILITIES.filter(f => f.category === category)
+            .sort((a, b) => facilityDisplayRank(a.name) - facilityDisplayRank(b.name)).map(f => `
             <div class="facility-card">
                 <h4>${f.name} <span class="info-icon" data-tooltip="${f.tooltip}">?</span></h4>
                 <div class="facility-tiers" data-facility="${f.name}"></div>
@@ -491,6 +493,7 @@ function renderSimpleSummary() {
     const built = FACILITIES
         .map(f => ({ name: f.name, tier: facilities[f.name][0], hasLevels: f.hasLevels !== false }))
         .filter(({ tier }) => tier.count > 0)
+        .sort((a, b) => facilityDisplayRank(a.name) - facilityDisplayRank(b.name))
         .map(({ name, tier, hasLevels }) => chip(`${tier.count}×`, name, hasLevels ? `Lv.${tier.level}` : ''))
         .join('');
     const moduleChips = [
@@ -2069,6 +2072,7 @@ function renderFacilityPlan(plan) {
     const categorySections = FACILITY_CATEGORIES.map(category => {
         const categorySteps = byCategory.get(category);
         if (categorySteps.length === 0) return '';
+        categorySteps.sort((a, b) => facilityDisplayRank(a.facility) - facilityDisplayRank(b.facility));
         return `
             <div class="facility-category">
                 <h4 class="facility-category-title">${category}</h4>
@@ -2497,7 +2501,8 @@ function renderRecipeTables(recipes) {
     });
 
     container.innerHTML = FACILITY_CATEGORIES.map(category => {
-        const facilitiesInCategory = FACILITIES.filter(f => f.category === category && byFacility.has(f.name));
+        const facilitiesInCategory = FACILITIES.filter(f => f.category === category && byFacility.has(f.name))
+            .sort((a, b) => facilityDisplayRank(a.name) - facilityDisplayRank(b.name));
         if (facilitiesInCategory.length === 0) return '';
 
         const tables = facilitiesInCategory.map(f => {
