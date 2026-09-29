@@ -17,9 +17,27 @@ const items = {
 };
 
 const names = {
-  'Farmland':'畑','Woodland':'林','Mine':'鉱山','Well':'井戸','Tidewhisper Sandcastle':'Tidewhisper Sandcastle','Dewy House':'Dewy House','Nimbus Bed':'Nimbus Bed','Starfall Hammock':'Starfall Hammock','Floral Windmill':'Floral Windmill','Heat Furnace':'Heat Furnace','Cooling Unit':'Cooling Unit','Sunlamp':'Sunlamp','Carousel Mill':'メリーゴーランド式ミル','Crafting Table':'作業台','Claw Game Cooker':'クレーンゲーム式コンロ','Jukebox Dryer':'メロディ乾燥機','Simmering Pot':'煮込み鍋','Phonolfactory Table':'蓄音機ふう調香台','Bouncy Brew Keg':'ポンポン醸造樽','Blazing Stove':'大火力かまど','Pickling Jar':'熟成漬け込み樽','Joy Wheel Loom':'観覧車ふう糸車','Dance Pad Polisher':'ダンスパワーマシン','Aniipod Maker':'Aniipod Maker','Woodworking Bench':'木工台','Chimney Kiln':'煙突鍛造炉',
+  'Farmland':'畑','Woodland':'林','Mine':'鉱山','Well':'井戸','Tidewhisper Sandcastle':'潮騒の砂城','Sandcastle':'砂城','Dewy House':'露の家','Nimbus Bed':'雲のベッド','Starfall Hammock':'星降るハンモック','Floral Windmill':'花の風車','Heat Furnace':'加熱炉','Cooling Unit':'冷却装置','Sunlamp':'太陽灯','Carousel Mill':'メリーゴーランド式ミル','Crafting Table':'作業台','Claw Game Cooker':'クレーンゲーム式コンロ','Jukebox Dryer':'メロディ乾燥機','Simmering Pot':'煮込み鍋','Phonolfactory Table':'蓄音機ふう調香台','Bouncy Brew Keg':'ポンポン醸造樽','Blazing Stove':'大火力かまど','Pickling Jar':'熟成漬け込み樽','Joy Wheel Loom':'観覧車ふう糸車','Dance Pad Polisher':'ダンスパワーマシン','Aniipod Maker':'アニポッドメーカー','Woodworking Bench':'木工台','Chimney Kiln':'煙突鍛造炉',
   'Earth':'土','Water':'水','Leisure':'遊び','Wind':'風','Artisanship':'クラフト','Fire':'火','Dark':'闇','Perfumery':'調香','Lightning':'雷','Light':'光','Ice':'氷','Grass':'草','Hauling':'運搬','Instinctive':'人見知り','Energetic':'人懐っこい','Nimble':'直感的','Practical':'現実的','Faithful':'心優しい','Tenacious':'冷酷','Playful':'自由気まま','Judicious':'従順','Freeze':'極寒','Cool':'涼しい','Room temp':'常温','Warm':'暖かい','Scorching':'灼熱','Adequate':'適温',
   'Materials Processing':'素材加工','Aniimo Materials':'アニモ素材','Materials':'素材','Environment':'環境設備','Ecological Module':'生態モジュール','Kitchen Module':'キッチンモジュール','Resource Detector':'資源探知機','Crafting Module':'クラフトモジュール'
+};
+
+// Runtime result text is assembled from solver data, so these fragments cannot be covered by
+// static HTML translation alone. Keep the English values in app.js and translate only the
+// rendered display strings here.
+const dynamic = {
+  'any level':'レベル不問','Coarse-Sifted Ore':'粗選鉱石','River-Washed Stones':'川磨き石','Premium River-Washed Stones':'高級川磨き石','Sugar-Roasted Chestnuts':'糖炒栗子',
+  'Sowing crops':'作物の種まき','Reaping crops':'作物の収穫','Reclaiming crops':'作物の開墾','Collecting crops':'作物の採集','Watering crops':'作物への水やり','Logging crops':'作物の伐採',
+  'Sowing farmland':'畑の種まき','Reaping farmland':'畑の収穫','Reclaiming farmland':'畑の開墾','Collecting farmland':'畑の採集','Watering farmland':'畑への水やり',
+  'Sowing woodland':'林の種まき','Reaping woodland':'林の収穫','Reclaiming woodland':'林の開墾','Collecting woodland':'林の採集','Watering woodland':'林への水やり','Logging woodland':'林の伐採',
+  'Sowing':'種まき','Reaping':'収穫','Reclaiming':'開墾','Collecting':'採集','Watering':'水やり','Logging':'伐採','crops':'作物','farmland':'畑','woodland':'林',
+  'Carries produce to storage. How much work this is isn\'t known yet; add more if produce piles up.':'生産物を倉庫へ運びます。必要な作業量は未確認です。生産物が滞留する場合は人数を増やしてください。',
+  'Hauling, any level · carries produce to storage; add more if produce piles up':'運搬、レベル不問・生産物を倉庫へ運搬。滞留する場合は人数を増やしてください',
+  'Cooking, smelting and heat':'調理・精錬・暖房','Planting seeds and gathering':'種まき・採集','Brewing, fetching water and watering':'醸造・水くみ・水やり','Reclaiming land and mining':'開墾・採掘','Electricity':'電力加工','Cooling the homeland':'ホームの冷却','Processing with wind':'風力加工','Harvesting, cutting, pickling and drying':'収穫・伐採・漬け込み・乾燥','Lighting the homeland':'ホームの照明','Carrying produce to storage':'生産物を倉庫へ運搬','Handcrafted goods':'クラフト製品の作成','Making things while playing':'遊びながら生産','Perfumes and incense':'香水・お香',
+  'Side by side, touching.':'隙間なく横に並べます。','Not made by this plan':'このプランでは生産されません','An unknown error occurred.':'不明なエラーが発生しました。',
+  'On: the plan goes for this':'オン：この項目を生産対象にします','Off: the plan ignores this':'オフ：この項目を生産対象から外します','no Aniipod Maker yet':'アニポッドメーカーがありません',
+  'Failed to load the optimizer. Please refresh the page.':'最適化ツールを読み込めませんでした。ページを再読み込みしてください。','Pick a recipe from the list.':'一覧からレシピを選択してください。','Stop skipping':'除外を解除','Plans will go for the most coins.':'コインが最大になる計画を表示します。','never':'達成不可','have it':'所持済み','Profit':'利益',
+  'Can\'t make this? Skip it and plan again':'生産できない場合は除外して再計算','Not yet checked in game.':'ゲーム内未確認。'
 };
 
 const ui = {
@@ -68,8 +86,15 @@ const longForm = {
 };
 
 const pretty = id => id.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-const replacements = new Map([...Object.entries(longForm), ...Object.entries(ui), ...Object.entries(names), ...Object.entries(items).map(([id, ja]) => [pretty(id), ja])]);
+const replacements = new Map([...Object.entries(longForm), ...Object.entries(ui), ...Object.entries(dynamic), ...Object.entries(names), ...Object.entries(items).map(([id, ja]) => [pretty(id), ja])]);
 const ordered = [...replacements.entries()].sort((a, b) => b[0].length - a[0].length);
+const localizeKnownNames = value => {
+  let result = value;
+  [...Object.entries(names), ['Aniimo', 'アニモ'], ['Aniipods', 'アニポッド'], ['Aniipod', 'アニポッド']]
+    .sort((a, b) => b[0].length - a[0].length)
+    .forEach(([en, ja]) => { result = result.replaceAll(en, ja); });
+  return result;
+};
 
 function translateText(value) {
   if (!value || !/[A-Za-z]/.test(value)) return value;
@@ -77,7 +102,7 @@ function translateText(value) {
   const trailing = value.match(/\s*$/)[0];
   let text = value.trim();
   const exact = replacements.get(text);
-  if (exact) return leading + exact.replace(/Aniimo/g, 'アニモ').replace(/Aniipods?/g, 'アニポッド') + trailing;
+  if (exact) return leading + localizeKnownNames(exact) + trailing;
   for (const [en, ja] of ordered) {
     if (en.length < 4) continue;
     const escaped = en.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -93,6 +118,26 @@ function translateText(value) {
     .replace(/^(.+) produced$/, '$1の生産量')
     .replace(/^in (.+)$/, '$1後')
     .replace(/^Backup planner, trial (\d+)…?$/, '予備プランナー：試行$1…')
+    .replace(/^In a row, (\d+) tiles? between them\.$/, '横一列に、間を$1タイル空けます。')
+    .replace(/^Corner to corner, the second sits (\d+) tiles? along and (\d+) tiles? up from the first\.$/, '角を基準に、2つ目を1つ目から横$1タイル・上$2タイルに配置します。')
+    .replace(/^That\'s (\d+) Aniimo\.$/, '合計$1体のアニモが必要です。')
+    .replace(/^That\'s (\d+) Aniimo; an RV level (\d+) homeland holds (\d+)\.$/, '合計$1体です。RVレベル$2のホームには$3体まで配置できます。')
+    .replace(/^That\'s (\d+) Aniimo, more than the (\d+) an RV level (\d+) homeland holds\.$/, '合計$1体で、RVレベル$3の配置上限$2体を超えています。')
+    .replace(/^(\d+) Aniimo · your homeland holds (\d+)( \(too many; see the list\))?$/, (_, need, cap, over) => `${need}体のアニモ・配置上限${cap}体${over ? '（上限超過・一覧を確認）' : ''}`)
+    .replace(/^(\d+) Aniimo$/, '$1体のアニモ')
+    .replace(/^(.+) \(\+20% speed\)$/, '$1（速度+20%）')
+    .replace(/^Move (.+) up$/, '$1を上へ移動')
+    .replace(/^Move (.+) down$/, '$1を下へ移動')
+    .replace(/^Stop skipping (.+)$/, '$1の除外を解除')
+    .replace(/^Skip (.+) and plan again$/, '$1を除外して再計算')
+    .replace(/^RV (\d+) level-up$/, 'RV $1レベルアップ')
+    .replace(/^RV (\d+) costs$/, 'RV $1の必要素材')
+    .replace(/^Best plan found in the time allowed; the best possible is at most ([\d.]+)% higher\.$/, '制限時間内で見つかった最良の計画です。理論上の最良値は最大$1%高い可能性があります。')
+    .replace(/^(\d+) recipes? in this plan (?:hasn\'t|haven\'t) been checked in game yet \(tagged below\)\. If any of those numbers are off, so is this plan\.$/, 'この計画にはゲーム内未確認のレシピが$1件あります（下に表示）。数値が異なる場合、計画結果も変わります。')
+    .replace(/^Skipping (.+)\.$/, '除外中：$1。')
+    .replace(/^Plan calculation failed: (.+)$/, '計画の計算に失敗しました：$1')
+    .replace(/^The exact planner couldn\'t run(?: \((.+)\))?, so this plan comes from the backup planner and may not be the very best\. Reloading the page usually fixes this\.$/, (_, reason) => `厳密プランナーを実行できなかったため${reason ? `（${reason}）` : ''}、予備プランナーの計画を表示しています。最適解とは限りません。通常はページを再読み込みすると解消します。`)
+    .replace(/畑 and 林/g, '畑と林')
     .replace(/Aniimo/g, 'アニモ')
     .replace(/Aniipods?/g, 'アニポッド');
   return leading + text + trailing;
@@ -110,7 +155,7 @@ function translateElement(root) {
   root.querySelectorAll?.('p, li').forEach(el => {
     const complete = el.textContent.trim();
     const translated = replacements.get(complete);
-    if (translated) el.textContent = translated.replace(/Aniimo/g, 'アニモ').replace(/Aniipods?/g, 'アニポッド');
+    if (translated) el.textContent = localizeKnownNames(translated);
   });
   if (root instanceof Element) {
     for (const attr of ['title', 'placeholder', 'aria-label', 'data-tooltip', 'data-label']) {
