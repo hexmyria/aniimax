@@ -586,7 +586,8 @@ let skippedRecipes = new Set();
 let recipeIndex = [];
 
 function recipeLabel(recipe) {
-    return `${prettyItem(recipe.name)} (${recipe.facility})`;
+    const translate = window.aniimaxTranslate || (value => value);
+    return `${translate(prettyItem(recipe.name))} (${translate(recipe.facility)})`;
 }
 
 async function loadRecipeIndex() {

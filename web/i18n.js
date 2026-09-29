@@ -26,7 +26,7 @@ const names = {
 // static HTML translation alone. Keep the English values in app.js and translate only the
 // rendered display strings here.
 const dynamic = {
-  'any level':'レベル不問','Coarse-Sifted Ore':'粗選鉱石','River-Washed Stones':'川磨き石','Premium River-Washed Stones':'高級川磨き石','Sugar-Roasted Chestnuts':'糖炒栗子',
+  'any level':'レベル不問','Coarse-Sifted Ore':'粗選鉱石','River-Washed Stones':'川磨き石','Premium River-Washed Stones':'高級川磨き石','Sugar-Roasted Chestnuts':'糖炒栗子','Flowers in a Bottle':'瓶詰めの花',
   'Sowing crops':'作物の種まき','Reaping crops':'作物の収穫','Reclaiming crops':'作物の開墾','Collecting crops':'作物の採集','Watering crops':'作物への水やり','Logging crops':'作物の伐採',
   'Sowing farmland':'畑の種まき','Reaping farmland':'畑の収穫','Reclaiming farmland':'畑の開墾','Collecting farmland':'畑の採集','Watering farmland':'畑への水やり',
   'Sowing woodland':'林の種まき','Reaping woodland':'林の収穫','Reclaiming woodland':'林の開墾','Collecting woodland':'林の採集','Watering woodland':'林への水やり','Logging woodland':'林の伐採',
@@ -43,7 +43,7 @@ const dynamic = {
 
 const ui = {
   'facilities':'設備','math':'計算方法','help':'使い方','light':'ライト','dark':'ダーク','aniimo homeland production optimizer':'アニモ・ホームランド生産最適化ツール',
-  'Your Homeland':'あなたのホームランド','Clear saved values':'保存値を消去','Simple':'かんたん','Advanced':'詳細','Input mode':'入力モード','RV level':'RVレベル','Facilities and modules':'設備とモジュール','Facilities':'設備','Item Upgrade Modules':'アイテム強化モジュール','Strategy':'戦略','Level up':'レベルアップ','Priorities':'優先順位','Recipes':'レシピ','Special recipes':'特別レシピ','Recipes to skip':'除外するレシピ','Search recipes':'レシピを検索','Skip':'除外','Find the best plan':'最適プランを検索','Solving...':'計算中…',
+  'Your Homeland':'あなたのホームランド','Clear saved values':'保存値を消去','Simple':'かんたん','Advanced':'詳細','Input mode':'入力モード','RV level':'RVレベル','Facilities and modules':'設備とモジュール','Facilities':'設備','Item Upgrade Modules':'アイテム強化モジュール','Strategy':'戦略','Level up':'レベルアップ','Priorities':'優先順位','Recipes':'レシピ','Special recipes':'特別レシピ','Recipes to skip':'除外するレシピ','Search recipes':'レシピを検索','Recipe to skip':'除外するレシピ','Skip':'除外','Find the best plan':'最適プランを検索','Solving...':'計算中…',
   'Count':'数','Level':'レベル','Add level':'レベルを追加','Remove this level':'このレベルを削除','Fill from RV level':'RVレベルから入力','Fill':'入力','Modules':'モジュール','not yet':'未解放','on':'有効','skipped':'除外','On':'オン','Off':'オフ','Coins':'コイン','Aniimo EXP':'アニモEXP','Aniipods':'アニポッド','Wood Blocks':'木材ブロック','Mineral Sand':'鉱砂',
   'Aniimo team':'アニモチーム','Best':'最適','Minimum':'最低限','I have level 4':'レベル4を所持','Your rate':'生産速度','Your rates':'生産速度','Seeds to plant':'植える種','Profit by product':'製品別利益','What each facility should do':'各設備の稼働内容','Set a goal':'目標を設定','Goal':'目標','Target Coins':'目標コイン','Current Coins':'現在のコイン','Total time':'合計時間','Coins Produced':'生産コイン','Product breakdown':'製品内訳','Seeds needed':'必要な種','Item':'アイテム','Facility':'設備','Amount':'数量','Total Worth':'合計価値','Crop':'作物','Plots':'区画','Plantings/Plot':'1区画あたりの作付回数','Total Seeds':'種の合計','Profit/sec':'毎秒利益','Level-up':'レベルアップ','Level up to RV':'目標RVレベル','What you already have':'現在の所持数','Producing':'生産内容','Why':'理由','How many':'必要数','Busy on average':'平均稼働率','Where':'担当','Cost':'費用','Need':'必要','Have':'所持','Ready in':'準備まで','Surplus:':'余剰：','Total':'合計','Product':'生産品','Sold per hour':'1時間あたりの販売数','Profit per hour':'1時間あたりの利益','Share':'割合','not sold':'非売品','RV level-ups':'RVレベルアップ素材','Overlap':'重複範囲','Facility Recipes':'設備別レシピ','Loading recipe data...':'レシピデータを読み込み中…',
   'Facility Recipes':'設備別レシピ','Loading recipe data...':'レシピデータを読み込み中…','How It Works':'仕組み','How to Use':'使い方','The model':'計算モデル','Time per batch':'1バッチの時間','Environment coverage':'環境設備の範囲','Time to reach a goal':'目標到達時間','The backup planner':'予備プランナー','Understanding the results':'結果の見方','How to read this':'表の見方','1. Tell it what you\'ve built':'1. 建設済みの設備を入力','2. Pick a strategy':'2. 方針を選択','3. Find the best plan':'3. 最適な計画を作成','4. Set a goal (optional)':'4. 目標を設定（任意）',
@@ -187,6 +187,10 @@ function configureToggle() {
     window.location.reload();
   });
 }
+
+// Dynamic controls such as the recipe-search datalist need their display labels before they are
+// inserted into the DOM. The English data and recipe IDs remain unchanged.
+window.aniimaxTranslate = language === 'ja' ? translateText : value => value;
 
 configureToggle();
 if (language === 'ja') {
