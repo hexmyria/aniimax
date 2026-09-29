@@ -2300,3 +2300,11 @@ tr:hover .skip-row,
     white-space: nowrap;
     cursor: pointer;
 }
+
+html[lang="ja"] body {
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", monospace;
+}
+
+.language-toggle {
+    min-width: 5.5rem;
+}
