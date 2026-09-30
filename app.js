@@ -585,7 +585,7 @@ function excludedRecipes() {
 
 let skippedRecipes = new Set();
 
-// Every recipe as `{ name, facility }`, loaded once for the search box.
+// Every recipe, loaded once for the search box and display-only recipe metadata.
 let recipeIndex = [];
 
 function recipeLabel(recipe) {
@@ -596,11 +596,14 @@ function recipeLabel(recipe) {
 async function loadRecipeIndex() {
     try {
         recipeIndex = JSON.parse(await callWorker('get_all_items'))
-            .map(r => ({ name: r.name, facility: r.facility, cost: r.cost || 0 }))
+            .map(r => ({ name: r.name, facility: r.facility, facilityLevel: r.facility_level, cost: r.cost || 0 }))
             .sort((a, b) => a.facility.localeCompare(b.facility) || a.name.localeCompare(b.name));
         document.getElementById('skip-options').innerHTML =
             recipeIndex.map(r => `<option value="${recipeLabel(r)}"></option>`).join('');
         renderSkippedRecipes();
+        // A plan can finish before this reference list on a very fast click. Refresh its display
+        // so the Materials Processing minimum-level column never stays at the loading fallback.
+        if (lastPlan?.success) renderFacilityPlan(lastPlan);
     } catch (error) {
         console.warn('Could not load the recipe list:', error);
     }
@@ -1375,15 +1378,15 @@ function taskLabel(task, facility, tagged = false) {
     return `${ability} Lv.${task.level} · ${personality}${letter ? ` (${letter})` : ''}`;
 }
 
-function facilityPlanTable(rows) {
-    return facilityPlanTableOf([{ rows }]);
+function facilityPlanTable(rows, showMinimumLevel = false) {
+    return facilityPlanTableOf([{ rows }], showMinimumLevel);
 }
 
 // One table over several labelled groups, e.g. a paired environment's three zones: each group's
 // rows follow a band naming it, so the column headers are written once.
-function facilityPlanTableOf(groups) {
+function facilityPlanTableOf(groups, showMinimumLevel = false) {
     const body = groups
-        .map(group => (group.label ? `<tr class="facility-plan-group"><td colspan="5">${group.label}</td></tr>` : '') + planRows(group.rows))
+        .map(group => (group.label ? `<tr class="facility-plan-group"><td colspan="${showMinimumLevel ? 6 : 5}">${group.label}</td></tr>` : '') + planRows(group.rows, showMinimumLevel))
         .join('');
     return `
         <div class="table-wrapper">
@@ -1393,6 +1396,7 @@ function facilityPlanTableOf(groups) {
                         <th>Facility</th>
                         <th>Count</th>
                         <th>Producing</th>
+                        ${showMinimumLevel ? '<th>Minimum facility level</th>' : ''}
                         <th>Aniimo</th>
                         <th>Why</th>
                     </tr>
@@ -1403,12 +1407,13 @@ function facilityPlanTableOf(groups) {
     `;
 }
 
-function planRows(rows) {
+function planRows(rows, showMinimumLevel = false) {
     return rows.map(step => `
                     <tr class="status-${step.status}">
                         <td data-label="Facility">${step.facility}</td>
                         <td data-label="Count">${step.facility_count}</td>
                         <td data-label="Producing">${step.item_name ? prettyItem(step.item_name) : '-'}${unverifiedRowKeys.has(`${step.facility}|${step.item_name}`) ? '<span class="tag unverified" title="Not yet checked in game">unverified</span>' : ''}${step.item_name && step.status === 'producing' ? `<button type="button" class="skip-row" data-skip="${step.item_name}" title="Can't make this? Skip it and plan again" aria-label="Skip ${prettyItem(step.item_name)} and plan again">✕</button>` : ''}</td>
+                        ${showMinimumLevel ? `<td data-label="Minimum facility level">${step.item_name ? `Lv.${recipeIndex.find(recipe => recipe.name === step.item_name && recipe.facility === step.facility)?.facilityLevel ?? '?'}+` : '-'}</td>` : ''}
                         <td data-label="Aniimo">${aniimoLabel(step)}</td>
                         <td data-label="Why">${prettyReason(step.reason)}</td>
                     </tr>
@@ -2076,7 +2081,7 @@ function renderFacilityPlan(plan) {
         return `
             <div class="facility-category">
                 <h4 class="facility-category-title">${category}</h4>
-                ${facilityPlanTable(categorySteps)}
+                ${facilityPlanTable(categorySteps, category === 'Materials Processing')}
             </div>
         `;
     }).join('');
