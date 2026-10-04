@@ -2,7 +2,7 @@
 
 /**
  * With "prioritize byproducts" on, the exact planner first finds the most of each byproduct the
- * facilities can make: one model per byproduct, `[{"resource", "lp", "variables"}]` (see
+ * facilities can make: one model per byproduct, `[{"resource", "lp", "variables", "tiebreak"}]` (see
  * [`exact_problem`] for the format). The caller solves each and passes
  * `[[resource, most per second], ...]` to [`exact_problem`] and [`exact_plan`] as the floors.
  * Empty when byproducts aren't prioritized.
@@ -26,7 +26,7 @@ export function exact_byproduct_problems(input_json) {
 
 /**
  * For the level-up strategy, the model for the soonest level-up (see
- * [`crate::exact::Goal::LevelUp`]): `{"lp", "variables"}` as in [`exact_problem`]. The caller
+ * [`crate::exact::Goal::LevelUp`]): `{"lp", "variables", "tiebreak"}` as in [`exact_problem`]. The caller
  * solves it and passes the pace it finds (its objective) to [`exact_problem`] and [`exact_plan`].
  * `lp` is empty for the coins strategy, or when the stock already covers the level-up.
  * @param {string} input_json
@@ -77,7 +77,7 @@ export function exact_plan(input_json, stage_json, solution_json) {
 /**
  * The model for the most of one priority `target` (see [`JsPlanInput::priorities`]) this
  * homeland can make while keeping every floor in `stage_json` (the priorities before it):
- * `{"lp", "variables"}` as in [`exact_problem`]. The caller solves it and adds
+ * `{"lp", "variables", "tiebreak"}` as in [`exact_problem`]. The caller solves it and adds
  * `[target, per second]` to the floors for the next priority and the final coin solve.
  * @param {string} input_json
  * @param {string} stage_json
@@ -105,8 +105,10 @@ export function exact_priority_problem(input_json, stage_json, target) {
 
 /**
  * The exact planner's model for this input (see [`crate::exact`]), for the caller to solve with
- * HiGHS and hand back to [`exact_plan`]: `{"lp": <CPLEX LP text>, "variables": <count>}`, where
- * the variables are `x0` up to `x<count - 1>`. `stage_json` is `{"floors": [[byproduct, per
+ * HiGHS and hand back to [`exact_plan`]: `{"lp": <CPLEX LP text>, "variables": <count>,
+ * "tiebreak": [[variable, weight], ...]}`, where the variables are `x0` up to `x<count - 1>` and
+ * the tie-break is added back to the solver's objective to get what it really made (see
+ * [`crate::exact::LpProblem`]). `stage_json` is `{"floors": [[byproduct, per
  * second], ...], "pace": <level-ups per day>}` from the earlier solves (see
  * [`exact_byproduct_problems`] and [`exact_level_up_problem`]); either can be left out. `lp` is
  * empty when the exact planner doesn't cover the input (a byproduct as the currency), so the
