@@ -2880,3 +2880,15 @@ html[lang="ja"] body {
 .language-toggle {
     min-width: 5.5rem;
 }
+
+.saved-results-card { display: grid; gap: 0.65rem; }
+.saved-results-head, .saved-result-row, .saved-result-actions { display: flex; align-items: center; gap: 0.65rem; }
+.saved-results-head, .saved-result-row { justify-content: space-between; }
+.saved-results-head h2, .saved-results-head p, .saved-results-list p { margin: 0; }
+.saved-results-list { display: grid; gap: 0.5rem; }
+.saved-result-row { padding-top: 0.5rem; border-top: 1px solid var(--border); }
+.saved-result-row > span:first-child { display: grid; gap: 0.15rem; }
+
+@media (max-width: 600px) {
+    .saved-results-head, .saved-result-row { align-items: stretch; flex-direction: column; }
+}

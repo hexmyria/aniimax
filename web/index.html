@@ -181,6 +181,17 @@
                 <div id="error-message" class="card error-message" style="display: none;"></div>
 
                 <div id="results-content">
+                    <div class="card saved-results-card">
+                        <div class="saved-results-head">
+                            <div>
+                                <h2>Saved Results</h2>
+                                <p class="hint small">The latest result is restored automatically. Save named results to compare or revisit later.</p>
+                            </div>
+                            <button type="button" class="toggle-button small" id="save-result-btn">Save this result</button>
+                        </div>
+                        <p class="hint small" id="saved-results-status" role="status" aria-live="polite"></p>
+                        <div class="saved-results-list" id="saved-results-list"></div>
+                    </div>
                     <div class="card aniimo-card" id="aniimo-card">
                         <div class="card-head">
                             <button type="button" class="collapse-toggle" id="aniimo-toggle" aria-expanded="false" aria-controls="aniimo-body">
@@ -527,7 +538,7 @@
             }
         });
     </script>
-    <script type="module" src="i18n.js?v=ja9"></script>
-    <script type="module" src="app.js?v=level1"></script>
+    <script type="module" src="i18n.js?v=ja10"></script>
+    <script type="module" src="app.js?v=season-history1"></script>
 </body>
 </html>

@@ -189,6 +189,7 @@ function showSelectedPlan() {
     lastPlan = plan;
     displayPlan(plan);
     if (plan.success) {
+        saveLatestResult();
         runTimeToGoal();
         rankImprovementsFor(setup);
     } else {
@@ -348,6 +349,9 @@ function attachFacilityTierHandlers() {
 // client-side (no account, no server); works identically on localhost and once this is
 // hosted on GitHub Pages, since localStorage is scoped to the page's own origin.
 const STORAGE_KEY = 'aniimax-config-v1';
+const RESULT_TO_OPEN_KEY = 'aniimax-result-to-open-v1';
+const RESULTS_DB_NAME = 'aniimax-results-v1';
+const RESULTS_STORE = 'results';
 
 // True once the player has picked a rate unit themselves this visit. Until then a fresh plan
 // picks the unit it reads best at; after it, their choice stands.
@@ -426,6 +430,124 @@ function currentConfig() {
         data[id] = (el.type === 'checkbox' || el.type === 'radio') ? el.checked : el.value;
     });
     return data;
+}
+
+// Results can be much larger than input settings, so keep them in IndexedDB. Nothing leaves this
+// browser. `latest` is overwritten automatically; named entries remain until they are deleted.
+function openResultsDb() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(RESULTS_DB_NAME, 1);
+        request.onupgradeneeded = () => request.result.createObjectStore(RESULTS_STORE, { keyPath: 'id' });
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function withResultsStore(mode, action) {
+    const db = await openResultsDb();
+    try {
+        return await new Promise((resolve, reject) => {
+            const request = action(db.transaction(RESULTS_STORE, mode).objectStore(RESULTS_STORE));
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    } finally {
+        db.close();
+    }
+}
+
+const putResult = result => withResultsStore('readwrite', store => store.put(result));
+const getResult = id => withResultsStore('readonly', store => store.get(id));
+const getAllResults = () => withResultsStore('readonly', store => store.getAll());
+const deleteResult = id => withResultsStore('readwrite', store => store.delete(id));
+
+function savedResultRecord(id, name) {
+    return { id, name, createdAt: new Date().toISOString(), config: currentConfig(), plan: lastPlan,
+        context: planContext, input: lastPlanInput, setup: selectedAniimoSetup(),
+        version: document.getElementById('version').textContent };
+}
+
+async function saveLatestResult() {
+    if (!lastPlan?.success) return;
+    try {
+        await putResult(savedResultRecord('latest', 'Latest result'));
+        await renderSavedResults();
+    } catch (error) {
+        console.warn('Could not save the latest result:', error);
+    }
+}
+
+async function saveNamedResult() {
+    if (!lastPlan?.success) return;
+    const suggested = `RV ${selectedHomeLevel()} · ${new Date().toLocaleString()}`;
+    const name = window.prompt('Name this result', suggested)?.trim();
+    if (!name) return;
+    const id = crypto.randomUUID ? crypto.randomUUID() : `saved-${Date.now()}`;
+    try {
+        await putResult(savedResultRecord(id, name));
+        document.getElementById('saved-results-status').textContent = 'Result saved in this browser.';
+        await renderSavedResults();
+    } catch (error) {
+        document.getElementById('saved-results-status').textContent = 'Could not save this result.';
+        console.warn('Could not save result:', error);
+    }
+}
+
+async function renderSavedResults() {
+    const list = document.getElementById('saved-results-list');
+    if (!list) return;
+    try {
+        const results = (await getAllResults()).filter(result => result.id !== 'latest')
+            .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        list.innerHTML = results.length ? results.map(result => `
+            <div class="saved-result-row">
+                <span><strong>${escapeText(result.name)}</strong><span class="hint small">${new Date(result.createdAt).toLocaleString()} · v${escapeText(result.version || '?')}</span></span>
+                <span class="saved-result-actions"><button type="button" class="toggle-button small" data-open-result="${result.id}">Open</button><button type="button" class="toggle-button small" data-delete-result="${result.id}">Delete</button></span>
+            </div>`).join('') : '<p class="hint small">No named results saved yet.</p>';
+    } catch (error) {
+        list.innerHTML = '<p class="hint small">Saved results are unavailable in this browser.</p>';
+        console.warn('Could not read saved results:', error);
+    }
+}
+
+async function restoreSavedResultOnLoad() {
+    try {
+        const requested = localStorage.getItem(RESULT_TO_OPEN_KEY);
+        if (requested) localStorage.removeItem(RESULT_TO_OPEN_KEY);
+        const result = await getResult(requested || 'latest');
+        if (!result?.plan?.success) return;
+        if (!requested && JSON.stringify(result.config) !== JSON.stringify(currentConfig())) return;
+        planContext = result.context;
+        lastPlanInput = result.input;
+        lastPlan = result.plan;
+        plansBySetup = { [result.setup || selectedAniimoSetup()]: result.plan };
+        displayPlan(result.plan);
+        document.getElementById('saved-results-status').textContent = requested
+            ? `Opened saved result: ${result.name}` : 'Restored the latest result from this browser.';
+        runTimeToGoal();
+    } catch (error) {
+        console.warn('Could not restore a saved result:', error);
+    }
+}
+
+function attachSavedResultHandlers() {
+    document.getElementById('save-result-btn').addEventListener('click', saveNamedResult);
+    document.getElementById('saved-results-list').addEventListener('click', async event => {
+        const openId = event.target.dataset.openResult;
+        const deleteId = event.target.dataset.deleteResult;
+        if (openId) {
+            const result = await getResult(openId);
+            if (!result) return;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(result.config));
+            localStorage.setItem(RESULT_TO_OPEN_KEY, openId);
+            window.location.reload();
+        } else if (deleteId) {
+            await deleteResult(deleteId);
+            document.getElementById('saved-results-status').textContent = 'Saved result deleted.';
+            await renderSavedResults();
+        }
+    });
+    renderSavedResults();
 }
 
 function clearShareHash() {
@@ -525,9 +647,10 @@ function attachAutoSave() {
     });
 }
 
-function clearSavedInputs() {
+async function clearSavedInputs() {
     try {
         localStorage.removeItem(STORAGE_KEY);
+        await deleteResult('latest');
     } catch (e) {
         console.warn('Could not clear saved inputs from localStorage:', e);
     }
@@ -2003,6 +2126,7 @@ async function loadRecipeIndex() {
         // A plan can finish before this reference list on a very fast click. Refresh its display
         // so the Materials Processing minimum-level column never stays at the loading fallback.
         if (lastPlan?.success) renderFacilityPlan(lastPlan);
+        await restoreSavedResultOnLoad();
     } catch (error) {
         console.warn('Could not load the recipe list:', error);
     }
@@ -4190,6 +4314,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     attachSeasonHandlers();
     attachRosterHandlers();
     attachLayoutHandlers();
+    attachSavedResultHandlers();
     attachPriorityHandlers();
     showAniimoSetup();
     applyConfigMode();
