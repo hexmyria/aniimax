@@ -231,6 +231,9 @@ p {
     cursor: pointer;
 }
 
+.food-mode { margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--border); }
+.food-mode .food-count { max-width: 12rem; margin-top: 0.75rem; }
+
 /* Radio Group (currency selector) */
 .radio-group {
     display: flex;

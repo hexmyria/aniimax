@@ -549,7 +549,22 @@ pub fn load_all_data(data_dir: &Path) -> Result<Vec<ProductionItem>, Box<dyn Err
 
     crate::models::add_uncovered_variants(&mut all_items);
     crate::models::apply_watering(&mut all_items);
+    apply_food_energy(&mut all_items, &std::fs::read_to_string(data_dir.join("food_energy.csv"))?)?;
     Ok(all_items)
+}
+
+/// Applies the current game's food Energy values without duplicating them across facility CSVs.
+pub fn apply_food_energy(items: &mut [ProductionItem], csv_text: &str) -> Result<(), Box<dyn Error>> {
+    let mut reader = csv::ReaderBuilder::new().trim(csv::Trim::All).from_reader(csv_text.as_bytes());
+    for row in reader.deserialize::<std::collections::HashMap<String, String>>() {
+        let row = row?;
+        let Some(name) = row.get("name") else { continue };
+        let Some(energy) = row.get("energy").and_then(|value| value.parse::<f64>().ok()) else { continue };
+        for item in items.iter_mut().filter(|item| crate::models::base_item_name(&item.name) == name) {
+            item.energy = Some(energy);
+        }
+    }
+    Ok(())
 }
 
 /// Aniimo-worked gathering facilities that share the Mine's CSV layout but have no byproduct.

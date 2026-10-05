@@ -506,6 +506,8 @@ fn get_embedded_items() -> Vec<ProductionItem> {
 
     crate::models::add_uncovered_variants(&mut items);
     crate::models::apply_watering(&mut items);
+    crate::data::apply_food_energy(&mut items, include_str!("../data/food_energy.csv"))
+        .expect("embedded food_energy.csv is valid");
     items
 }
 
@@ -751,6 +753,9 @@ pub struct JsPlanInput {
     /// `"season_points"` (see [`crate::models::SEASON_POINTS`]).
     #[serde(default)]
     pub season: bool,
+    /// Energy/sec that must be diverted to the shared Homeland food reserve.
+    #[serde(default)]
+    pub food_energy_per_second: f64,
 }
 
 /// The player's Aniimo, and what the page knows of the facilities they work (see
@@ -1215,6 +1220,9 @@ pub struct JsProductionPlan {
     /// building kind a member staffs.
     #[serde(default)]
     pub staffing: Vec<(String, usize, f64)>,
+    /// Food diverted from sale: `(item, units/sec, energy/sec)`.
+    #[serde(default)]
+    pub food_items: Vec<(String, f64, f64)>,
 }
 
 /// What a plan makes of one priority.
@@ -1277,6 +1285,7 @@ fn empty_production_plan(success: bool, error: Option<String>) -> JsProductionPl
         priorities: vec![],
         season_points: None,
         staffing: Vec::new(),
+        food_items: vec![],
     }
 }
 
@@ -1503,7 +1512,7 @@ pub fn exact_plan(input_json: &str, stage_json: &str, solution_json: &str) -> St
     ) else {
         return no_plan();
     };
-    if exact.rate_per_second <= 0.0 && level_up.is_none() {
+    if exact.rate_per_second <= 0.0 && level_up.is_none() && prepared.input.food_energy_per_second <= 0.0 {
         return no_plan();
     }
     // Independent re-check of every limit before trusting the plan; the caller falls back to the
@@ -1520,6 +1529,14 @@ pub fn exact_plan(input_json: &str, stage_json: &str, solution_json: &str) -> St
     let mut js = prepared.to_js(plan, Some(proof));
     js.level_up = report;
     js.staffing = exact.staffing.clone();
+    js.food_items = exact
+        .fed
+        .iter()
+        .filter_map(|(name, &rate)| {
+            let energy = prepared.items.iter().find(|item| item.name == *name)?.energy?;
+            Some((name.clone(), rate, rate * energy))
+        })
+        .collect();
     if prepared.input.season {
         js.season_points = Some(crate::exact::target_rate(&exact, &prepared.items, crate::models::SEASON_POINTS));
     }
@@ -1620,6 +1637,8 @@ impl PreparedInput {
         let mut items = get_embedded_items();
         if input.season {
             items.extend(embedded_season_items());
+            crate::data::apply_food_energy(&mut items, include_str!("../data/food_energy.csv"))
+                .expect("embedded food_energy.csv is valid");
         }
         items.retain(|item| !input.exclude.iter().any(|name| name == crate::models::base_item_name(&item.name)));
         let setup = input
@@ -1725,6 +1744,7 @@ impl PreparedInput {
             priorities: vec![],
             season_points,
             staffing: Vec::new(),
+            food_items: vec![],
         }
     }
 }

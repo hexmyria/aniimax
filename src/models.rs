@@ -96,6 +96,8 @@ pub struct ProductionItem {
 
 /// The priority and currency name for a season's points (see [`SeasonTerms::points`]).
 pub const SEASON_POINTS: &str = "season_points";
+/// Pseudo-currency used by the exact planner for food diverted to the Homeland's shared reserve.
+pub const FOOD_ENERGY: &str = "food_energy";
 
 /// A season item's terms, e.g. for the Harvest Moon Festival an Umbral Hot Pot sells for 2150
 /// coins and 8 points, and a Moondew Radish's seeds cost 4 Moonray Wheat. Season orders pay out

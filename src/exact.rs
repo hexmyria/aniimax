@@ -127,6 +127,8 @@ pub struct ExactPlan {
     pub units: BTreeMap<String, u32>,
     /// Units/sec sold of each item.
     pub sold: BTreeMap<String, f64>,
+    /// Units/sec diverted to the Homeland food reserve instead of sold or processed.
+    pub fed: BTreeMap<String, f64>,
     pub environment: Vec<ExactEnvironment>,
     /// Overlapping pairs of environment buildings (see [`ExactPair`]).
     pub pairs: Vec<ExactPair>,
@@ -221,6 +223,7 @@ enum VarKind<'a> {
     Rate(&'a ProductionItem),
     Units(&'a ProductionItem),
     Sold(&'a str),
+    Fed(&'a str),
     Pace,
     /// Made beyond what the level-up needs, of one of its costs.
     Extra,
@@ -369,6 +372,11 @@ fn build_model<'a>(
         _ => Vec::new(),
     };
     let mut sold_of: Vec<(usize, &ProductionItem)> = Vec::new();
+    let food_floor = match goal {
+        Goal::Earn { floors } => floors.iter().find(|(name, _)| name == crate::models::FOOD_ENERGY).map_or(0.0, |(_, n)| *n),
+        _ => 0.0,
+    };
+    let mut fed_of: Vec<(usize, &ProductionItem)> = Vec::new();
     for (&item_name, terms) in &mut balance {
         if let Some(&item) = all.get(item_name) {
             if item.earns(currency) > 0.0 || floor_currencies.iter().any(|&c| item.earns(c) > 0.0) {
@@ -376,7 +384,19 @@ fn build_model<'a>(
                 sold_of.push((sold, item));
                 terms.push((sold, -1.0));
             }
+            if food_floor > 0.0 && item.energy.is_some_and(|energy| energy > 0.0) {
+                let fed = model.add(0.0, (0.0, f64::INFINITY), false, VarKind::Fed(item.name.as_str()));
+                fed_of.push((fed, item));
+                terms.push((fed, -1.0));
+            }
         }
+    }
+    if food_floor > 0.0 {
+        model.constrain(
+            fed_of.iter().filter_map(|&(v, item)| item.energy.map(|energy| (v, energy))).collect(),
+            ComparisonOp::Ge,
+            food_floor,
+        );
     }
     // Every variable added from here on earns nothing.
     model.earnings = model.objective.clone();
@@ -583,6 +603,9 @@ fn build_model<'a>(
         Goal::Earn { floors } => {
             for (resource, floor) in floors {
                 if *floor <= 0.0 {
+                    continue;
+                }
+                if resource == crate::models::FOOD_ENERGY {
                     continue;
                 }
                 let byproduct = byproduct_terms(resource);
@@ -928,6 +951,7 @@ fn plan_from(model: &Model, value: f64, upper_bound: f64, proven_optimal: bool, 
     let mut recipe_rates = BTreeMap::new();
     let mut units = BTreeMap::new();
     let mut sold = BTreeMap::new();
+    let mut fed = BTreeMap::new();
     let mut environment = Vec::new();
     let mut pairs: Vec<ExactPair> = Vec::new();
     let mut pace = None;
@@ -948,6 +972,9 @@ fn plan_from(model: &Model, value: f64, upper_bound: f64, proven_optimal: bool, 
             }
             VarKind::Sold(name) if v > 1e-9 => {
                 sold.insert(name.to_string(), v);
+            }
+            VarKind::Fed(name) if v > 1e-9 => {
+                fed.insert(name.to_string(), v);
             }
             VarKind::EnvironmentPair { buildings, modes, types, option } if v > 0.5 => {
                 let middle = crate::coverage::mode_temperature(modes.0)
@@ -996,6 +1023,7 @@ fn plan_from(model: &Model, value: f64, upper_bound: f64, proven_optimal: bool, 
         recipe_rates,
         units,
         sold,
+        fed,
         environment,
         pairs,
         pace,
@@ -1059,6 +1087,10 @@ pub fn check_plan(
         // An item sold for another currency (Aniimo EXP, Aniipods) leaves the balance the same
         // way, but earns nothing towards `currency`.
         earned += sold * item.earns(currency);
+    }
+    for (name, &fed) in &plan.fed {
+        let item = all.get(name.as_str()).ok_or(format!("unknown food item {name}"))?;
+        *made.entry(item.name.as_str()).or_default() -= fed;
     }
     if let Some(level_up) = level_up {
         let pace = plan.pace.ok_or("the plan has no level-up pace")?;
@@ -1364,6 +1396,9 @@ pub fn net_rates(exact: &ExactPlan, items: &[ProductionItem]) -> BTreeMap<String
     for (name, &sold) in &exact.sold {
         *net.entry(name.clone()).or_default() -= sold;
     }
+    for (name, &fed) in &exact.fed {
+        *net.entry(name.clone()).or_default() -= fed;
+    }
     net
 }
 
@@ -1376,6 +1411,9 @@ fn seed_costs_by_item<'a>(exact: &'a ExactPlan, all: &HashMap<&str, &'a Producti
     let mut used: HashMap<&str, f64> = HashMap::new();
     for (name, &sold) in &exact.sold {
         *used.entry(name.as_str()).or_default() += sold;
+    }
+    for (name, &fed) in &exact.fed {
+        *used.entry(name.as_str()).or_default() += fed;
     }
     let recipes: Vec<(&ProductionItem, f64)> =
         exact.recipe_rates.iter().filter_map(|(name, &rate)| Some((*all.get(name.as_str())?, rate))).collect();
@@ -1443,9 +1481,16 @@ pub fn to_production_plan(
         uses.sort_unstable();
         uses.dedup();
         let sells = exact.sold.get(made).is_some_and(|&s| s > 1e-9);
+        let feeds = exact.fed.get(made).is_some_and(|&n| n > 1e-9);
         // Made, not sold, not all used up and not sellable: kept for the level-up.
         let sellable = all.get(made).is_some_and(|item| item.sell_currency != "none" && item.sell_value > 0.0);
         let kept = exact.pace.is_some() && !sells && !sellable && net_rates(exact, items).get(made).is_some_and(|&n| n > 1e-9);
+        if feeds && uses.is_empty() && !sells {
+            return "Feeds the Aniimo".to_string();
+        }
+        if feeds {
+            uses.push("feeding the Aniimo");
+        }
         match (uses.is_empty(), sells || kept) {
             (true, _) if kept => "For the level-up".to_string(),
             (true, _) => "Sells directly".to_string(),

@@ -42,6 +42,25 @@ fn exact_picks_the_best_crop_on_its_own() {
     assert_eq!(plan.units.get("potato"), Some(&6));
 }
 
+#[test]
+fn exact_food_floor_diverts_enough_food_before_earning_coins() {
+    let Some(items) = load_items() else { return };
+    let counts = FacilityCounts::only(&[("Farmland", 6, 3)]);
+    // Two Homeland Aniimo consume 20 Energy/minute.
+    let demand = 20.0 / 60.0;
+    let floors = vec![(aniimax::models::FOOD_ENERGY.to_string(), demand)];
+    let plan = solve_exact(&items, "coins", &counts, &ModuleLevels::default(), Goal::Earn { floors: &floors }, None, None)
+        .expect("food-self-sufficient plan");
+    assert!(plan.proven_optimal);
+    let energy: f64 = plan
+        .fed
+        .iter()
+        .map(|(name, rate)| rate * items.iter().find(|item| item.name == *name).and_then(|item| item.energy).unwrap())
+        .sum();
+    assert!(energy >= demand - 1e-6, "made {energy} Energy/s, needs {demand}");
+    check_plan(&plan, &items, "coins", &counts, &ModuleLevels::default(), None).expect("food plan passes its re-check");
+}
+
 // rice_drink (Carousel Mill) needs milled_rice made at a Carousel Mill too; with two Mills, one
 // makes each. 3 rice plots, watered, make a rice drink every 1200s: 0.000833/sec x (1860 - 2 x 12
 // seed) = 1.53; 4 Wells with level-1 Aniimo make 0.014222 fresh_water/sec, the drinks use 16 each

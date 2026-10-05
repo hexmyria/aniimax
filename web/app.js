@@ -368,6 +368,7 @@ function getPersistedFieldIds() {
         'ecological-module-level', 'kitchen-module-level',
         'resource-detector-level', 'crafting-module-level',
         'rate-unit', 'season-on', 'layout-sim-on',
+        'food-self-sufficient', 'food-aniimo-count',
         'aniimo-best', 'aniimo-minimum', 'aniimo-custom'
     ];
 }
@@ -2513,6 +2514,12 @@ function renderStrategy() {
 function attachStrategyHandlers() {
     document.getElementById('strategy-level-up').addEventListener('change', renderStrategy);
     document.getElementById('strategy-priorities').addEventListener('change', renderStrategy);
+    const foodToggle = document.getElementById('food-self-sufficient');
+    const foodCount = document.getElementById('food-aniimo-count');
+    const showFoodCount = () => { document.getElementById('food-count-field').hidden = !foodToggle.checked; };
+    foodToggle.addEventListener('change', showFoodCount);
+    foodCount.addEventListener('input', saveInputsToStorage);
+    showFoodCount();
     document.getElementById('level-up-target').addEventListener('change', () => {
         levelUpTargetChosen = true;
         renderStrategy();
@@ -2718,6 +2725,9 @@ function renderProfitBreakdown(plan) {
 // goal-related, since find_plan doesn't need a target). Currency is always coins: the full
 // release removed Bud Tickets, the only other sellable currency.
 function getPlanInputValues() {
+    const foodEnergy = !isLevelUpStrategy() && document.getElementById('food-self-sufficient').checked
+        ? Math.max(1, Math.floor(numberOrDefault(document.getElementById('food-aniimo-count').value, 1))) * 10 / 60
+        : 0;
     // `facilityTiers` is the live source of truth for owned counts (kept in sync with the DOM by
     // `attachFacilityTierHandlers`), sent straight through as a list of tiers per facility; see
     // `JsPlanInput::facilities` in wasm.rs for the shape (`[{count, level}, ...]` per facility).
@@ -2730,6 +2740,7 @@ function getPlanInputValues() {
             level_up: levelUpInput(),
             exclude: excludedRecipes(),
             season: seasonActive(),
+            food_energy_per_second: foodEnergy,
             facilities,
             modules
         };
@@ -2757,6 +2768,7 @@ function getPlanInputValues() {
         level_up: levelUpInput(),
         exclude: excludedRecipes(),
         season: seasonActive(),
+        food_energy_per_second: foodEnergy,
         facilities,
         modules
     };
@@ -3877,11 +3889,30 @@ function displayPlan(plan) {
     skippedEl.textContent = skipped.length ? `Skipping ${skipped.map(prettyItem).join(', ')}.` : '';
 
     renderSeedTable(plan);
+    renderFoodPlan(plan);
     renderLevelUp(plan);
     renderProfitBreakdown(plan);
     renderFacilityPlan(plan);
     renderAniimoSummary(plan);
     // The page stays where the player is; the results appear without scrolling to them.
+}
+
+function renderFoodPlan(plan) {
+    const card = document.getElementById('food-card');
+    const foods = plan.food_items || [];
+    if (!foods.length) {
+        card.style.display = 'none';
+        return;
+    }
+    const count = Math.max(1, Math.floor(numberOrDefault(document.getElementById('food-aniimo-count').value, 1)));
+    const perDay = 86400;
+    const energy = foods.reduce((sum, row) => sum + row[2], 0);
+    document.getElementById('food-summary').textContent = `${count} Aniimo × 10 Energy/minute: ${formatNumber(energy * perDay)} Energy/day.`;
+    document.getElementById('food-table').innerHTML = `<table>
+        <thead><tr><th>Food</th><th>Amount/day</th><th>Energy/day</th></tr></thead>
+        <tbody>${foods.map(([name, rate, energyRate]) => `<tr><td>${prettyItem(name)}</td><td>${formatNumber(rate * perDay)}</td><td>${formatNumber(energyRate * perDay)}</td></tr>`).join('')}</tbody>
+    </table>`;
+    card.style.display = 'block';
 }
 
 // Render a time-to-goal result: Total Time / Amount Produced summary + Product Breakdown. Called
