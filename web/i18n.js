@@ -17,6 +17,14 @@ const items = {
   premium_river_washed_stones:'上級水磨き石',premium_rose_freshener:'上級ローズアロマチップ',advanced_wind_chime:'上級風鈴',advanced_gemstone_dust:'高級宝石の結晶塵',premium_bread:'上級パン',premium_berry_chocolate_coconut_pudding:'上級イチゴチョコのココナッツプリン',advanced_lemon_incense:'上級レモンアロマ',premium_soap:'上級石けん',premium_mixed_perfume:'上級調合香水',premium_potato_soup:'上級ジャガイモのポタージュ',premium_jello:'上級ゼリー',premium_sweet_rice_wine:'上級ライスミルク',premium_salted_lemon:'上級塩レモン'
 };
 
+// Some hand-written result labels do not use the title casing produced from the internal ID.
+// Keep these aliases in the display layer so both forms resolve to the same verified game name.
+const itemAliases = {
+  'Umbral Sweet and Spicy Sauce':'双月甘辛ソース',
+  'Umbral Sweet And Spicy Sauce':'双月甘辛ソース',
+  'Umbral Sweet Spicy Sauce':'双月甘辛ソース'
+};
+
 const names = {
   'Farmland':'畑','Woodland':'林','Mine':'鉱山','Well':'井戸','Tidewhisper Sandcastle':'潮の砂城','Sandcastle':'砂城','Dewy House':'ミツドリハウス','Nimbus Bed':'雲のベッド','Starfall Hammock':'星降るハンモック','Floral Windmill':'花の風車','Heat Furnace':'加熱炉','Cooling Unit':'冷却装置','Sunlamp':'太陽灯','Carousel Mill':'メリーゴーランド式ミル','Crafting Table':'作業台','Claw Game Cooker':'クレーンゲーム式コンロ','Jukebox Dryer':'メロディ乾燥機','Simmering Pot':'煮込み鍋','Phonolfactory Table':'蓄音機ふう調香台','Bouncy Brew Keg':'ポンポン醸造樽','Blazing Stove':'大火力かまど','Pickling Jar':'熟成漬け込み樽','Joy Wheel Loom':'観覧車ふう糸車','Dance Pad Polisher':'ダンスパワーマシン','Aniipod Maker':'アニポッドメーカー','Woodworking Bench':'木工台','Chimney Kiln':'煙突鍛造炉',
   'Earth':'土','Water':'水','Leisure':'遊び','Wind':'風','Artisanship':'クラフト','Fire':'火','Dark':'闇','Perfumery':'調香','Lightning':'雷','Light':'光','Ice':'氷','Grass':'草','Hauling':'運搬','Instinctive':'人見知り','Energetic':'人懐っこい','Nimble':'直感的','Practical':'現実的','Faithful':'心優しい','Tenacious':'冷酷','Playful':'自由気まま','Judicious':'従順','Freeze':'極寒','Cool':'涼しい','Room temp':'常温','Warm':'暖かい','Scorching':'灼熱','Adequate':'適温',
@@ -126,7 +134,7 @@ const longForm = {
 };
 
 const pretty = id => id.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-const replacements = new Map([...Object.entries(longForm), ...Object.entries(ui), ...Object.entries(dynamic), ...Object.entries(names), ...Object.entries(items).map(([id, ja]) => [pretty(id), ja])]);
+const replacements = new Map([...Object.entries(longForm), ...Object.entries(ui), ...Object.entries(dynamic), ...Object.entries(names), ...Object.entries(itemAliases), ...Object.entries(items).map(([id, ja]) => [pretty(id), ja])]);
 const ordered = [...replacements.entries()].sort((a, b) => b[0].length - a[0].length);
 const localizeKnownNames = value => {
   let result = value;
