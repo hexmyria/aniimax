@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { layOut, layOutZonedHomeland } from '../web/layout.js';
+import { layOutZonedHomeland, rotateLayoutDistricts } from '../web/layout.js';
 import { STORAGE_UNIT_MAX } from '../web/facility-config.js';
 
 test('storage unit cap follows the RV level', () => {
@@ -11,21 +11,37 @@ test('storage unit cap follows the RV level', () => {
     assert.equal(STORAGE_UNIT_MAX[19], 8);
 });
 
-test('a block can be constrained to a requested quarter turn', () => {
-    const result = layOut([{
-        layoutKey: 'industry|test|0',
-        rotationQuarter: 1,
-        members: [
-            { x: 0, y: 0, w: 2, h: 1, weight: 1, facility: 'Test A' },
-            { x: 2, y: 0, w: 1, h: 1, weight: 1, facility: 'Test B' },
-        ],
-    }]);
+test('a complete production district rotates with its storage unit', () => {
+    const layout = {
+        storage: { x: 3, y: 3, w: 2, h: 2, label: 'farm' },
+        storages: [{ x: 3, y: 3, w: 2, h: 2, label: 'farm' }],
+        pieces: [{ layoutGroup: 'farm', members: [
+            { x: 0, y: 0, w: 2, h: 1, weight: 1, facility: 'Farmland', layoutGroup: 'farm' },
+            { x: 2, y: 0, w: 1, h: 1, weight: 1, facility: 'Woodland', layoutGroup: 'farm' },
+        ] }],
+    };
+    const result = rotateLayoutDistricts(layout, [{ x: -10, y: -10, w: 30, h: 30 }], { farm: 1 });
     const members = result.pieces[0].members;
     const width = Math.max(...members.map(m => m.x + m.w)) - Math.min(...members.map(m => m.x));
     const height = Math.max(...members.map(m => m.y + m.h)) - Math.min(...members.map(m => m.y));
     assert.equal(width, 1);
     assert.equal(height, 3);
-    assert.ok(members.every(member => member.layoutKey === 'industry|test|0'));
+    assert.notDeepEqual(result.storages[0], layout.storages[0]);
+    assert.deepEqual(result.rejectedRotations, []);
+});
+
+test('a district turn is rejected when it would leave the open plots', () => {
+    const layout = {
+        storage: { x: 0, y: 0, w: 2, h: 2, label: 'farm' },
+        storages: [{ x: 0, y: 0, w: 2, h: 2, label: 'farm' }],
+        pieces: [{ layoutGroup: 'farm', members: [
+            { x: 2, y: 0, w: 6, h: 1, facility: 'Farmland', layoutGroup: 'farm' },
+        ] }],
+    };
+    const result = rotateLayoutDistricts(layout, [{ x: 0, y: 0, w: 8, h: 2 }], { farm: 1 });
+    assert.deepEqual(result.rejectedRotations, ['farm']);
+    assert.deepEqual(result.storages, layout.storages);
+    assert.deepEqual(result.pieces[0].members, layout.pieces[0].members);
 });
 
 test('four-storage layout merges workshops and assigns the spare by hauling demand', () => {
