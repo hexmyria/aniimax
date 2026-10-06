@@ -290,6 +290,43 @@ export const FACILITY_FOOTPRINTS = {
     'Storage Unit': [2, 2],
 };
 
+// E-mode is unlocked with the Power Module at RV 12. Power draw is per active facility and
+// depends on that facility's level. These values are used only by the layout preview: choosing
+// E-mode does not change the production optimizer until electric recipe timers are part of its
+// canonical recipe data.
+export const ELECTRIC_FACILITY_POWER = Object.freeze({
+    'Aniipod Maker': [30, 60, 90],
+    'Dance Pad Polisher': [30, 60, 90],
+    'Mine': [30, 60, 90, 120, 150, 180],
+    'Well': [30, 60, 90, 120, 150],
+    'Blazing Stove': [15, 30, 45, 60, 75],
+    'Bouncy Brew Keg': [15, 30, 45, 60, 75],
+    'Carousel Mill': [15, 30, 45, 60, 75, 90],
+    'Chimney Kiln': [15, 30, 45, 60],
+    'Claw Game Cooker': [15, 30, 45, 60, 75, 90, 105],
+    'Crafting Table': [15, 30, 45, 60, 75, 90, 105, 120],
+    'Joy Wheel Loom': [15, 30, 45, 60],
+    'Jukebox Dryer': [15, 30, 45, 60, 75, 90, 105],
+    'Phonolfactory Table': [15, 30, 45, 60, 75, 90],
+    'Pickling Jar': [15, 30, 45, 60, 75],
+    'Simmering Pot': [15, 30, 45, 60, 75, 90],
+    'Woodworking Bench': [15, 30, 45, 60],
+});
+
+export const POWER_GRID = Object.freeze({
+    unlockRv: 12,
+    generatorFootprint: [1, 1],
+    generatorCoverage: 11,
+    poleFootprint: [1.5, 1.5],
+    poleCoverage: 7,
+    generatorLevels: [
+        { unlockRv: 12, power: 600 }, { unlockRv: 14, power: 800 },
+        { unlockRv: 16, power: 1000 }, { unlockRv: 18, power: 1200 },
+        { unlockRv: 20, power: 1500 },
+    ],
+    poleCaps: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 6, 12, 12, 18, 18, 24, 24, 30],
+});
+
 // The homeland: a 4x4 grid of plots, each 20 tiles wide and 15 tall, plot n opening at RV n (and
 // all of them from RV 16). Rows from the top, by plot number; the first opens bottom middle.
 export const HOMELAND_PLOT_SIZE = { w: 20, h: 15 };

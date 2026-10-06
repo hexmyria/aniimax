@@ -4,10 +4,11 @@ import {
     FACILITIES, FACILITY_CATEGORIES, FACILITY_CATEGORY_BY_NAME, FACILITY_FOOTPRINTS, HOMELAND_PLOTS, HOMELAND_PLOT_SIZE,
     MAX_HOME_LEVEL, ANIIMO_MAX, STORAGE_UNIT_MAX, simpleSetup,
     LEVEL_UP_COSTS, LEVEL_UP_CHAINS, SPECIAL_RECIPES, SEASON, ANIIPOD_TIERS, PERSONALITY_PAIRS, personalityLetter, opposedPersonality,
-    facilityDisplayRank,
+    facilityDisplayRank, ELECTRIC_FACILITY_POWER, POWER_GRID,
 } from './facility-config.js?v=season2';
 import { createShareUrl, readShareHash, urlWithoutShare } from './share-config.js';
 import { sharedFacilityUtilization, theoreticalUtilization } from './utilization.js?v=1';
+import { routePowerGrid } from './power-layout.js?v=1';
 
 let wasmReady = false;
 
@@ -229,6 +230,7 @@ const RATE_UNIT_SECONDS = {
 // level 3 and 4 more upgraded to level 5), so a facility can own more than one tier; facilities
 // that don't level up at all (`hasLevels: false`) only ever have exactly one.
 let facilityTiers = {};
+let poweredFacilities = new Set();
 
 function defaultFacilityTiers() {
     const tiers = {};
@@ -421,11 +423,14 @@ function initFacilityTiers(data) {
             }))
             : defaults[f.name];
     });
+    poweredFacilities = new Set(Array.isArray(data?.poweredFacilities)
+        ? data.poweredFacilities.filter(name => name in ELECTRIC_FACILITY_POWER)
+        : []);
 
 }
 
 function currentConfig() {
-    const data = { facilityTiers, levelUpStock, skippedRecipes: [...skippedRecipes], unlockedSpecial: [...unlockedSpecial], priorities: priorityOrder, aniimoLevels, roster };
+    const data = { facilityTiers, poweredFacilities: [...poweredFacilities], levelUpStock, skippedRecipes: [...skippedRecipes], unlockedSpecial: [...unlockedSpecial], priorities: priorityOrder, aniimoLevels, roster };
     getPersistedFieldIds().forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
@@ -1350,6 +1355,15 @@ function homelandPieces(plan, input) {
         const building = f.name in ENVIRONMENT_BUILDING_SIZES;
         for (let i = 0; i < extra; i++) pieces.push({ members: [{ x: 0, y: 0, w: footprint[0], h: footprint[1], weight: 0, facility: f.name, crop: null, building, mode: null }] });
     });
+    // Power is a layout preference, not a solver input. Only active copies are marked: idle
+    // owned machines do not consume grid capacity merely because their facility type is selected.
+    pieces.forEach(piece => (piece.members || piece.plots || []).forEach(member => {
+        if (!poweredFacilities.has(member.facility) || !(member.weight > 0)) return;
+        const draws = ELECTRIC_FACILITY_POWER[member.facility];
+        const level = Math.max(1, tierLevel(input.facilities[member.facility]));
+        member.powered = true;
+        member.powerDemand = draws?.[Math.min(level, draws.length) - 1] || 0;
+    }));
     return { pieces: bundleLayoutFacilities(pieces), unplaced: [...unplaced] };
 }
 
@@ -1429,6 +1443,22 @@ function renderHomelandLayout(plan) {
         layoutWorker = null;
         if (runId !== layoutRunId) return;
         const layout = event.data;
+        const powered = layout.pieces.flatMap(p => p.members).filter(m => m.powered);
+        if (powered.length) {
+            const occupied = [...(layout.storages || [layout.storage]), ...layout.pieces.flatMap(p => p.members)];
+            const generatorLevel = POWER_GRID.generatorLevels.reduce((level, spec, i) => spec.unlockRv <= homeLevel ? i + 1 : level, 0);
+            const generatorSpec = POWER_GRID.generatorLevels[Math.max(0, generatorLevel - 1)];
+            const routed = routePowerGrid({
+                targets: powered, occupied, cells,
+                generatorFootprint: POWER_GRID.generatorFootprint,
+                generatorCoverage: POWER_GRID.generatorCoverage,
+                poleFootprint: POWER_GRID.poleFootprint,
+                poleCoverage: POWER_GRID.poleCoverage,
+                poleCap: POWER_GRID.poleCaps[homeLevel - 1] || 0,
+            });
+            const demand = powered.reduce((sum, member) => sum + (member.powerDemand || 0), 0);
+            layout.powerGrid = { ...routed, demand, supply: generatorSpec?.power || 0, generatorLevel };
+        }
         // Buildings carry nothing themselves.
         const members = layout.pieces.flatMap(p => p.members).map(m => ({ ...m, weight: m.weight || 0 }));
         const trips = members.reduce((sum, m) => sum + m.weight, 0);
@@ -1443,11 +1473,15 @@ function renderHomelandLayout(plan) {
         const notes = [
             noRoom.length ? `No room found in RV ${homeLevel}'s plots for: ${noRoom.join(', ')}.` : '',
             unplaced.length ? `Not placed, size unknown: ${unplaced.join(', ')}.` : '',
+            layout.powerGrid?.unpowered.length ? `${layout.powerGrid.unpowered.length} selected E-mode facilit${layout.powerGrid.unpowered.length === 1 ? 'y is' : 'ies are'} outside the available power grid.` : '',
+            layout.powerGrid?.demand > layout.powerGrid?.supply ? `Selected E-mode facilities exceed generator output by ${layout.powerGrid.demand - layout.powerGrid.supply}.` : '',
         ].filter(Boolean).join(' ');
         const storageCount = (layout.storages || [layout.storage]).length;
+        const power = layout.powerGrid;
+        const powerText = power ? ` Power: ${power.demand}/${power.supply} (${power.generatorLevel > 0 ? `Generator Lv.${power.generatorLevel}` : 'unavailable'}, ${power.poles.length} pole${power.poles.length === 1 ? '' : 's'}).` : '';
         document.getElementById('layout-summary').textContent = `${trips > 0
             ? `${formatNumber(Math.round(trips))} trips/hour to ${storageCount} Storage Unit${storageCount === 1 ? '' : 's'}, ${(walked / trips).toFixed(1)} tiles each on average, in the ${cells.length} plot${cells.length === 1 ? '' : 's'} open at RV ${homeLevel}.`
-            : 'Nothing in this plan is carried to the Storage Unit.'}${notes ? ` ${notes}` : ''}`;
+            : 'Nothing in this plan is carried to the Storage Unit.'}${powerText}${notes ? ` ${notes}` : ''}`;
         lastLayout = { layout, homeLevel };
         drawLayout(lastLayout);
         setStep('layout', 'done');
@@ -1498,7 +1532,10 @@ function homelandSvg(layout, homeLevel) {
     const plots = homelandPlots();
     // Zoomed to what's placed, a couple of tiles around it, unless the whole homeland is asked for.
     const storages = layout.storages || [layout.storage];
-    const placed = [...storages, ...layout.pieces.flatMap(p => p.members)];
+    const powerUtilities = layout.powerGrid
+        ? [layout.powerGrid.generator, ...layout.powerGrid.poles].filter(Boolean)
+        : [];
+    const placed = [...storages, ...layout.pieces.flatMap(p => p.members), ...powerUtilities];
     const whole = layoutShowsWhole;
     const minX = whole ? -1 : Math.floor(Math.min(...placed.map(r => r.x))) - 2;
     const minY = whole ? -1 : Math.floor(Math.min(...placed.map(r => r.y))) - 2;
@@ -1533,7 +1570,7 @@ function homelandSvg(layout, homeLevel) {
                 fill="${color}" fill-opacity="${m.mode ? 1 : 0.25}" stroke="currentColor" stroke-opacity="0.6" stroke-width="0.08" />
                 ${m.mode ? environmentBuildingIcon(m.facility, m.mode, m.x + m.w / 2, m.y + m.h / 2) : ''}</g>`;
         }
-        return `<g class="layout-piece" ${tip}><rect x="${m.x + 0.04}" y="${m.y + 0.04}" width="${m.w - 0.08}" height="${m.h - 0.08}" rx="0.2"
+        return `<g class="layout-piece${m.powered ? ' layout-powered' : ''}" ${tip}><rect x="${m.x + 0.04}" y="${m.y + 0.04}" width="${m.w - 0.08}" height="${m.h - 0.08}" rx="0.2"
             fill="${color}" fill-opacity="${fill.toFixed(2)}" stroke="${color}" stroke-width="0.06" />${label}</g>`;
     }).join('');
     const coverageShapes = coverage.map(c => {
@@ -1546,6 +1583,20 @@ function homelandSvg(layout, homeLevel) {
         const tint = ENVIRONMENT_MODE_COLORS[c.mode] || '#9aa0a8';
         return `<rect x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" fill="none"
             stroke="${tint}" stroke-opacity="0.8" stroke-dasharray="0.35,0.25" stroke-width="0.08" />`;
+    }).join('');
+    const powerFields = (layout.powerGrid?.fields || []).map(field => `<rect x="${field.x}" y="${field.y}" width="${field.w}" height="${field.h}"
+        class="power-field ${field.source}" />`).join('');
+    const sources = [layout.powerGrid?.generator, ...(layout.powerGrid?.poles || [])].filter(Boolean);
+    const powerLines = sources.slice(1).map((pole, i) => {
+        const previous = sources.slice(0, i + 1).reduce((best, source) => centerDistanceForLayout(source, pole) < centerDistanceForLayout(best, pole) ? source : best, sources[0]);
+        return `<line x1="${previous.x + previous.w / 2}" y1="${previous.y + previous.h / 2}" x2="${pole.x + pole.w / 2}" y2="${pole.y + pole.h / 2}" class="power-line" />`;
+    }).join('');
+    const powerShapes = sources.map((source, i) => {
+        const generator = i === 0;
+        const name = generator ? 'Crackle Generator' : `Crackle Power Pole ${i}`;
+        const detail = generator ? `Lv.${layout.powerGrid.generatorLevel} · ${layout.powerGrid.supply} power` : 'Power relay';
+        return `<g class="layout-power-utility" ${tipAttrs(name, { detail })}><rect x="${source.x + 0.04}" y="${source.y + 0.04}" width="${source.w - 0.08}" height="${source.h - 0.08}" rx="0.18" />
+            <text x="${source.x + source.w / 2}" y="${source.y + source.h / 2}" font-size="${generator ? 0.65 : 0.55}">${generator ? 'G' : 'P'}</text></g>`;
     }).join('');
     // A line from everything carried to the Storage Unit, each drawn once its first batch is in,
     // and a ring for the batch it's on (see "Deliveries"), in the same order as `layoutFlows`.
@@ -1565,12 +1616,19 @@ function homelandSvg(layout, homeLevel) {
         <g class="env-grid">${lines.join('')}</g>
         <g class="layout-plots">${plotShapes}</g>
         <g class="layout-coverage">${coverageShapes}</g>
+        <g class="layout-power-fields">${powerFields}</g>
+        <g class="layout-power-lines">${powerLines}</g>
         ${shapes}
         <g class="layout-coverage-edges" pointer-events="none">${coverageEdges}</g>
         <g class="layout-rings" pointer-events="none">${rings}</g>
         <g class="layout-flows" pointer-events="none">${flows}<g class="layout-dots"></g></g>
         ${storageShapes}
+        ${powerShapes}
     </svg>`;
+}
+
+function centerDistanceForLayout(a, b) {
+    return Math.hypot(a.x + a.w / 2 - (b.x + b.w / 2), a.y + a.h / 2 - (b.y + b.h / 2));
 }
 
 // --- Deliveries ------------------------------------------------------------------------
@@ -2269,6 +2327,15 @@ function attachSkipHandlers() {
         if (!name) return;
         setSkipped(name, true);
         runFindPlan();
+    });
+    document.getElementById('facility-plan-container').addEventListener('change', (e) => {
+        const facility = e.target.closest('[data-power-facility]')?.dataset.powerFacility;
+        if (!facility) return;
+        if (e.target.checked) poweredFacilities.add(facility);
+        else poweredFacilities.delete(facility);
+        saveInputsToStorage();
+        renderFacilityPlan(lastPlan);
+        renderHomelandLayout(lastPlan);
     });
 }
 
@@ -3097,7 +3164,7 @@ function facilityPlanTableOf(groups, showMinimumLevel = false) {
     const sharedUtilization = new Map([...new Set(allRows.map(step => step.facility))]
         .map(facility => [facility, sharedFacilityUtilization(allRows, facility)]));
     const body = groups
-        .map(group => (group.label ? `<tr class="facility-plan-group"><td colspan="${showMinimumLevel ? 7 : 6}">${group.label}</td></tr>` : '') + planRows(group.rows, showMinimumLevel, sharedUtilization))
+        .map(group => (group.label ? `<tr class="facility-plan-group"><td colspan="${showMinimumLevel ? 8 : 7}">${group.label}</td></tr>` : '') + planRows(group.rows, showMinimumLevel, sharedUtilization))
         .join('');
     return `
         <div class="table-wrapper">
@@ -3110,6 +3177,7 @@ function facilityPlanTableOf(groups, showMinimumLevel = false) {
                         ${showMinimumLevel ? '<th>Minimum facility level</th>' : ''}
                         <th>Aniimo</th>
                         <th>Theoretical utilization</th>
+                        <th>E-mode</th>
                         <th>Why</th>
                     </tr>
                 </thead>
@@ -3126,6 +3194,11 @@ function planRows(rows, showMinimumLevel = false, sharedUtilization = new Map())
         const utilizationText = utilization == null
             ? '—'
             : `${formatPercent(utilization)}${total == null ? '' : `<span class="utilization-total">facility total ${formatPercent(total)}</span>`}`;
+        const electric = ELECTRIC_FACILITY_POWER[step.facility];
+        const canPower = electric && step.status === 'producing' && layoutHomeLevel() >= POWER_GRID.unlockRv;
+        const powerControl = electric
+            ? `<label class="power-choice" title="Display this facility type on the Crackle power grid; production calculations are unchanged"><input type="checkbox" data-power-facility="${step.facility}" ${poweredFacilities.has(step.facility) ? 'checked' : ''} ${canPower ? '' : 'disabled'}><span>${canPower ? 'Use' : `RV ${POWER_GRID.unlockRv}+`}</span></label>`
+            : '—';
         return `
                     <tr class="status-${step.status}">
                         <td data-label="Facility">${step.facility}</td>
@@ -3134,6 +3207,7 @@ function planRows(rows, showMinimumLevel = false, sharedUtilization = new Map())
                         ${showMinimumLevel ? `<td data-label="Minimum facility level">${step.item_name ? `Lv.${recipeIndex.find(recipe => recipe.name === step.item_name && recipe.facility === step.facility)?.facilityLevel ?? '?'}+` : '-'}</td>` : ''}
                         <td data-label="Aniimo">${aniimoLabel(step)}</td>
                         <td data-label="Theoretical utilization" class="utilization-cell">${utilizationText}</td>
+                        <td data-label="E-mode">${powerControl}</td>
                         <td data-label="Why">${prettyReason(step.reason)}</td>
                     </tr>
                 `;
