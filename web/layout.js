@@ -385,6 +385,31 @@ export function layOutZonedHomeland(pieces, cells, storageCount, storage = { w: 
         });
         indices.forEach(i => { storages[i].label = group.name; });
     });
+    // Extra warehouses for one district need separate catchment areas, but scattering them to
+    // opposite sides of the homeland makes the district—and especially its power wiring—needlessly
+    // long. Pull each extra unit to the nearest free point ten tiles from its district's first.
+    // This is far enough to avoid acting like one warehouse while keeping the zone compact.
+    const sharedStorageGap = 10;
+    groups.forEach(group => {
+        const indices = indicesByGroup.get(group.name);
+        if (indices.length < 2) return;
+        const base = storages[indices[0]];
+        const center = { x: base.x + base.w / 2, y: base.y + base.h / 2 };
+        indices.slice(1).forEach(index => {
+            const options = [
+                [sharedStorageGap, 0], [-sharedStorageGap, 0], [0, sharedStorageGap], [0, -sharedStorageGap],
+                [sharedStorageGap, sharedStorageGap], [-sharedStorageGap, sharedStorageGap],
+                [sharedStorageGap, -sharedStorageGap], [-sharedStorageGap, -sharedStorageGap],
+            ].map(([dx, dy]) => ({
+                x: center.x + dx - storage.w / 2,
+                y: center.y + dy - storage.h / 2,
+                w: storage.w,
+                h: storage.h,
+            })).filter(candidate => fits({ x: candidate.x + candidate.w / 2, y: candidate.y + candidate.h / 2 })
+                && storages.every((other, otherIndex) => otherIndex === index || !overlaps(candidate, other)));
+            if (options.length) Object.assign(storages[index], options[0]);
+        });
+    });
     // If there are more category groups than usable storage positions, merge overflow groups into
     // the last anchor rather than dropping them.
     pieces.forEach(piece => { if (!Number.isInteger(piece.storageIndex)) piece.storageIndex = storages.length - 1; });

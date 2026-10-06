@@ -33,6 +33,8 @@ test('four-storage layout merges workshops and assigns the spare by hauling dema
     assert.equal(result.storages.filter(storage => storage.label === 'work').length, 2);
     assert.equal(result.storages.filter(storage => storage.label === 'farm').length, 1);
     assert.equal(result.storages.filter(storage => storage.label === 'primary').length, 1);
+    const [workA, workB] = result.storages.filter(storage => storage.label === 'work');
+    assert.equal(Math.hypot(workA.x - workB.x, workA.y - workB.y), 10);
 });
 
 test('four-storage layout gives the spare warehouse to busy farming', () => {
@@ -51,6 +53,8 @@ test('four-storage layout gives the spare warehouse to busy farming', () => {
     ];
     const result = layOutZonedHomeland(pieces, cells, 4);
     assert.equal(result.storages.filter(storage => storage.label === 'farm').length, 2);
+    const [farmA, farmB] = result.storages.filter(storage => storage.label === 'farm');
+    assert.equal(Math.hypot(farmA.x - farmB.x, farmA.y - farmB.y), 10);
     const farmStorageIndices = new Set(result.pieces
         .filter(piece => piece.layoutGroup === 'farm')
         .flatMap(piece => piece.members.map(member => member.storageIndex)));
