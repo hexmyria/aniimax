@@ -129,6 +129,9 @@ async function exactPlanJson(pkg, payload, step = () => {}, first = () => {}) {
             allProven &&= fastest.proven;
             stage.pace = fastest.objective;
         } else {
+            if (input.dedicated_level_up_facilities) {
+                throw new Error('not enough dedicated processors for every level-up recipe');
+            }
             levelUpNote = 'unreachable';
         }
     }
@@ -264,15 +267,35 @@ self.onmessage = async (event) => {
             try {
                 let top = null;
                 result = await exactPlanJson(pkg, payload, step, found => { top ||= found; });
-                if (top) {
+                {
                     const plan = JSON.parse(result);
-                    plan.measure_top = top;
+                    plan.dedicated_level_up_facilities = !!JSON.parse(payload).dedicated_level_up_facilities;
+                    if (top) plan.measure_top = top;
                     result = JSON.stringify(plan);
                 }
             } catch (error) {
                 fallbackReason = error && error.message ? error.message : String(error);
+                const requested = JSON.parse(payload);
+                if (requested.dedicated_level_up_facilities
+                    && requested.level_up
+                    && fallbackReason === 'not enough dedicated processors for every level-up recipe') {
+                    try {
+                        const sharedPayload = JSON.stringify({ ...requested, dedicated_level_up_facilities: false });
+                        result = await exactPlanJson(pkg, sharedPayload, step);
+                        const sharedPlan = JSON.parse(result);
+                        sharedPlan.dedicated_level_up_facilities = false;
+                        sharedPlan.facility_sharing_fallback = true;
+                        result = JSON.stringify(sharedPlan);
+                    } catch (sharedError) {
+                        fallbackReason = sharedError && sharedError.message ? sharedError.message : String(sharedError);
+                    }
+                }
+                if (result) {
+                    self.postMessage({ id, ok: true, result });
+                    return;
+                }
                 // The backup planner doesn't know the player's roster, so a roster plan stops here.
-                const input = JSON.parse(payload);
+                const input = requested;
                 if (input.aniimo?.startsWith('roster') || (input.food_energy_per_second || 0) > 0) {
                     console.warn('Exact planner failed on a roster:', error);
                     result = JSON.stringify({ success: false, error: input.food_energy_per_second > 0

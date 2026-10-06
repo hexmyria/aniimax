@@ -208,6 +208,13 @@ pub fn takes_turns(recipe: &ProductionItem) -> bool {
     recipe.sell_currency == "none"
 }
 
+/// Whether a level-up recipe may share a physical processor in this solve. In idle-friendly
+/// plans each active recipe gets whole units of its own, so the player can leave every tier
+/// running without changing recipes by hand.
+fn shares_facility(recipe: &ProductionItem, dedicated_level_up_facilities: bool) -> bool {
+    takes_turns(recipe) && !dedicated_level_up_facilities
+}
+
 /// The item a recipe makes: a quick variant makes the regular item, and an uncovered crop (see
 /// [`crate::models::add_uncovered_variants`]) makes the same crop, just slower.
 fn made_item<'a>(name: &'a str, all: &HashMap<&str, &ProductionItem>) -> &'a str {
@@ -313,6 +320,7 @@ fn build_model<'a>(
     facility_counts: &FacilityCounts,
     module_levels: &ModuleLevels,
     goal: Goal,
+    dedicated_level_up_facilities: bool,
 ) -> Model<'a> {
     let all: HashMap<&str, &ProductionItem> = items.iter().map(|i| (i.name.as_str(), i)).collect();
     let recipes: Vec<&ProductionItem> = items
@@ -344,7 +352,7 @@ fn build_model<'a>(
     for &recipe in &recipes {
         let rate = model.add(-seed_cost(recipe), (0.0, f64::INFINITY), false, VarKind::Rate(recipe));
         let max = facility_counts.get_count(&recipe.facility) as f64;
-        let units = model.add(0.0, (0.0, max), !takes_turns(recipe), VarKind::Units(recipe));
+        let units = model.add(0.0, (0.0, max), !shares_facility(recipe, dedicated_level_up_facilities), VarKind::Units(recipe));
         model.constrain(vec![(rate, recipe.production_time), (units, -1.0)], ComparisonOp::Le, 0.0);
         rate_of.push((recipe, rate));
         units_of.push((recipe, units));
@@ -752,7 +760,22 @@ pub fn solve_exact(
     time_limit: Option<Duration>,
     start: Option<&crate::models::ProductionPlan>,
 ) -> Option<ExactPlan> {
-    let model = build_model(items, currency, facility_counts, module_levels, goal);
+    solve_exact_with_mode(items, currency, facility_counts, module_levels, goal, time_limit, start, false)
+}
+
+/// [`solve_exact`] with idle-friendly level-up processor assignment.
+#[allow(clippy::too_many_arguments)]
+pub fn solve_exact_with_mode(
+    items: &[ProductionItem],
+    currency: &str,
+    facility_counts: &FacilityCounts,
+    module_levels: &ModuleLevels,
+    goal: Goal,
+    time_limit: Option<Duration>,
+    start: Option<&crate::models::ProductionPlan>,
+    dedicated_level_up_facilities: bool,
+) -> Option<ExactPlan> {
+    let model = build_model(items, currency, facility_counts, module_levels, goal, dedicated_level_up_facilities);
     let began = Instant::now();
     let out_of_time = || time_limit.is_some_and(|limit| began.elapsed() >= limit);
     let mut nodes = 0u32;
@@ -943,7 +966,7 @@ pub fn solve_relaxed(
     facility_counts: &FacilityCounts,
     module_levels: &ModuleLevels,
 ) -> Option<f64> {
-    let model = build_model(items, currency, facility_counts, module_levels, Goal::Earn { floors: &[] });
+    let model = build_model(items, currency, facility_counts, module_levels, Goal::Earn { floors: &[] }, false);
     model.relax(&model.bounds).map(|(value, _)| value)
 }
 
@@ -1042,6 +1065,19 @@ pub fn check_plan(
     module_levels: &ModuleLevels,
     level_up: Option<&LevelUp>,
 ) -> Result<f64, String> {
+    check_plan_with_mode(plan, items, currency, facility_counts, module_levels, level_up, false)
+}
+
+/// [`check_plan`] using the processor-sharing policy used to build the plan.
+pub fn check_plan_with_mode(
+    plan: &ExactPlan,
+    items: &[ProductionItem],
+    currency: &str,
+    facility_counts: &FacilityCounts,
+    module_levels: &ModuleLevels,
+    level_up: Option<&LevelUp>,
+    dedicated_level_up_facilities: bool,
+) -> Result<f64, String> {
     const TOLERANCE: f64 = 1e-6;
     let all: HashMap<&str, &ProductionItem> = items.iter().map(|i| (i.name.as_str(), i)).collect();
     let mut earned = 0.0;
@@ -1063,7 +1099,11 @@ pub fn check_plan(
         if rate * recipe.production_time > units as f64 + TOLERANCE {
             return Err(format!("{name} runs {rate}/s but has {units} units at {}s each", recipe.production_time));
         }
-        let in_use = if takes_turns(recipe) { rate * recipe.production_time } else { units as f64 };
+        let in_use = if shares_facility(recipe, dedicated_level_up_facilities) {
+            rate * recipe.production_time
+        } else {
+            units as f64
+        };
         units_at.entry(recipe.facility.as_str()).or_default().push((recipe.facility_level, in_use));
         if let Some(environment) = recipe.environment.as_deref() {
             *plots_needing.entry((recipe.facility.as_str(), environment)).or_default() += units;
@@ -1223,7 +1263,19 @@ pub fn write_lp(
     module_levels: &ModuleLevels,
     goal: Goal,
 ) -> LpProblem {
-    let model = build_model(items, currency, facility_counts, module_levels, goal);
+    write_lp_with_mode(items, currency, facility_counts, module_levels, goal, false)
+}
+
+/// [`write_lp`] with idle-friendly processor assignment enabled by the web planner.
+pub fn write_lp_with_mode(
+    items: &[ProductionItem],
+    currency: &str,
+    facility_counts: &FacilityCounts,
+    module_levels: &ModuleLevels,
+    goal: Goal,
+    dedicated_level_up_facilities: bool,
+) -> LpProblem {
+    let model = build_model(items, currency, facility_counts, module_levels, goal, dedicated_level_up_facilities);
     let term = |c: f64, v: usize| format!("{} {} x{v}", if c < 0.0 { "-" } else { "+" }, c.abs());
     let mut out = String::from("Maximize\n obj:");
     for (v, &c) in model.objective.iter().enumerate() {
@@ -1275,7 +1327,25 @@ pub fn plan_from_values(
     proven_optimal: bool,
     upper_bound: f64,
 ) -> Option<ExactPlan> {
-    let model = build_model(items, currency, facility_counts, module_levels, goal);
+    plan_from_values_with_mode(
+        items, currency, facility_counts, module_levels, goal, values, proven_optimal, upper_bound, false,
+    )
+}
+
+/// [`plan_from_values`] using the same processor-sharing mode as the LP that was solved.
+#[allow(clippy::too_many_arguments)]
+pub fn plan_from_values_with_mode(
+    items: &[ProductionItem],
+    currency: &str,
+    facility_counts: &FacilityCounts,
+    module_levels: &ModuleLevels,
+    goal: Goal,
+    values: &[f64],
+    proven_optimal: bool,
+    upper_bound: f64,
+    dedicated_level_up_facilities: bool,
+) -> Option<ExactPlan> {
+    let model = build_model(items, currency, facility_counts, module_levels, goal, dedicated_level_up_facilities);
     if values.len() != model.objective.len() {
         return None;
     }
@@ -1464,6 +1534,17 @@ pub fn to_production_plan(
     currency: &str,
     facility_counts: &FacilityCounts,
 ) -> crate::models::ProductionPlan {
+    to_production_plan_with_mode(exact, items, currency, facility_counts, false)
+}
+
+/// [`to_production_plan`] using the processor-sharing policy used by the solve.
+pub fn to_production_plan_with_mode(
+    exact: &ExactPlan,
+    items: &[ProductionItem],
+    currency: &str,
+    facility_counts: &FacilityCounts,
+    dedicated_level_up_facilities: bool,
+) -> crate::models::ProductionPlan {
     use crate::models::{EnvironmentAssignment, FacilityPlacement, PlanProduct, PlanStep, PlanStepStatus};
     let all: HashMap<&str, &ProductionItem> = items.iter().map(|i| (i.name.as_str(), i)).collect();
     let is_grower = |facility: &str| !items.iter().any(|i| i.facility == facility && i.raw_materials.is_some());
@@ -1534,14 +1615,14 @@ pub fn to_production_plan(
             continue;
         }
         // Recipes taking turns share units, so what's in use is their combined time.
-        let shared: Vec<&str> = rows.iter().filter(|(r, _, _)| takes_turns(r)).map(|(r, _, _)| r.name.as_str()).collect();
-        let shared_time: f64 = rows.iter().filter(|(r, _, _)| takes_turns(r)).map(|(r, _, rate)| rate * r.production_time).sum();
-        let used: u32 = rows.iter().filter(|(r, _, _)| !takes_turns(r)).map(|(_, u, _)| u).sum::<u32>()
+        let shared: Vec<&str> = rows.iter().filter(|(r, _, _)| shares_facility(r, dedicated_level_up_facilities)).map(|(r, _, _)| r.name.as_str()).collect();
+        let shared_time: f64 = rows.iter().filter(|(r, _, _)| shares_facility(r, dedicated_level_up_facilities)).map(|(r, _, rate)| rate * r.production_time).sum();
+        let used: u32 = rows.iter().filter(|(r, _, _)| !shares_facility(r, dedicated_level_up_facilities)).map(|(_, u, _)| u).sum::<u32>()
             + ((shared_time - 1e-6).ceil().max(0.0) as u32);
         let used = used.min(owned);
         for (recipe, units, rate) in rows {
             let mut reason = uses_of(recipe);
-            if takes_turns(recipe) {
+            if shares_facility(recipe, dedicated_level_up_facilities) {
                 let others: Vec<&str> = shared.iter().copied().filter(|n| *n != recipe.name).collect();
                 if !others.is_empty() {
                     reason = format!("{reason}; takes turns with {}", others.join(", "));

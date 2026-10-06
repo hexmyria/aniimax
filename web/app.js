@@ -1306,7 +1306,9 @@ function homelandPieces(plan, input) {
 
     // Recipes taking turns on the same units (the Bench's and Kiln's tiers) share them: as many
     // units as their busy time together needs, each running every tier in turn at its share.
-    const takesTurns = step => step.status === 'producing' && !!recipeIndex.find(r => r.name === step.item_name)?.turns;
+    const takesTurns = step => !plan.dedicated_level_up_facilities
+        && step.status === 'producing'
+        && !!recipeIndex.find(r => r.name === step.item_name)?.turns;
     const turnGroups = new Map();
     steps.filter(takesTurns).forEach(step => turnGroups.set(step.facility, [...(turnGroups.get(step.facility) || []), step]));
     turnGroups.forEach((rows, facility) => {
@@ -2892,6 +2894,7 @@ function getPlanInputValues() {
             exclude: excludedRecipes(),
             season: seasonActive(),
             food_energy_per_second: foodEnergy,
+            dedicated_level_up_facilities: true,
             facilities,
             modules
         };
@@ -2920,6 +2923,7 @@ function getPlanInputValues() {
         exclude: excludedRecipes(),
         season: seasonActive(),
         food_energy_per_second: foodEnergy,
+        dedicated_level_up_facilities: true,
         facilities,
         modules
     };
@@ -4051,6 +4055,17 @@ function displayPlan(plan) {
         unverifiedEl.style.display = 'block';
     } else {
         unverifiedEl.style.display = 'none';
+    }
+
+    const operationModeEl = document.getElementById('plan-operation-mode');
+    if (planContext?.levelUp && plan.dedicated_level_up_facilities) {
+        operationModeEl.textContent = 'Idle-friendly plan: each active level-up recipe has its own Woodworking Bench or Chimney Kiln and runs simultaneously.';
+        operationModeEl.style.display = 'block';
+    } else if (planContext?.levelUp && plan.facility_sharing_fallback) {
+        operationModeEl.textContent = 'Not enough processors for dedicated operation, so this plan switches recipes on shared Woodworking Benches or Chimney Kilns.';
+        operationModeEl.style.display = 'block';
+    } else {
+        operationModeEl.style.display = 'none';
     }
 
     const skippedEl = document.getElementById('plan-skipped');

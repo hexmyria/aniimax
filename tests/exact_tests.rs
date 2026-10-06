@@ -3,8 +3,11 @@
 //! where worked out by hand, earns exactly what the arithmetic in the comments says.
 
 use aniimax::data::{load_all_data, load_aniimo_requirements};
-use aniimax::exact::{check_plan, net_rates, solve_exact, to_production_plan, ExactPlan, Goal, LevelUp, PACE_UNIT};
-use aniimax::models::{AniimoSetup, FacilityCounts, ModuleLevels, ProductionItem};
+use aniimax::exact::{
+    check_plan, net_rates, solve_exact, solve_exact_with_mode, to_production_plan, to_production_plan_with_mode,
+    ExactPlan, Goal, LevelUp, PACE_UNIT,
+};
+use aniimax::models::{AniimoSetup, FacilityCounts, ModuleLevels, PlanStepStatus, ProductionItem};
 use aniimax::optimizer::find_production_plan;
 use std::path::Path;
 use std::time::Duration;
@@ -272,6 +275,50 @@ fn exact_level_up_takes_turns_on_one_bench() {
     let bench_busy: f64 =
         shown.coin_items.iter().filter(|s| s.facility == "Woodworking Bench").filter_map(|s| s.busy_units).sum();
     assert!(bench_busy <= 1.0 + 1e-6, "Bench busy {bench_busy}");
+}
+
+#[test]
+fn exact_level_up_dedicates_one_bench_per_active_recipe() {
+    let Some(items) = load_items() else { return };
+    let cost = level_up(&[("standard_planks", 320.0)], &[]);
+    let one = FacilityCounts::only(&[("Woodland", 3, 2), ("Woodworking Bench", 1, 2)]);
+    let blocked = solve_exact_with_mode(
+        &items,
+        "coins",
+        &one,
+        &ModuleLevels::default(),
+        Goal::LevelUp(&cost),
+        None,
+        None,
+        true,
+    )
+    .unwrap();
+    assert!(blocked.objective < 1e-9, "one Bench cannot run both tiers simultaneously: {blocked:?}");
+
+    let two = FacilityCounts::only(&[("Woodland", 3, 2), ("Woodworking Bench", 2, 2)]);
+    let plan = solve_exact_with_mode(
+        &items,
+        "coins",
+        &two,
+        &ModuleLevels::default(),
+        Goal::LevelUp(&cost),
+        None,
+        None,
+        true,
+    )
+    .unwrap();
+    assert!(plan.objective > 0.0, "two Benches should run the two tiers: {plan:?}");
+    assert_eq!(plan.units.get("rough_lumber"), Some(&1));
+    assert_eq!(plan.units.get("standard_planks"), Some(&1));
+    let shown = to_production_plan_with_mode(&plan, &items, "coins", &two, true);
+    let used: u32 = shown
+        .coin_items
+        .iter()
+        .filter(|s| s.facility == "Woodworking Bench" && s.status == PlanStepStatus::Producing)
+        .map(|s| s.facility_count)
+        .sum();
+    assert_eq!(used, 2);
+    assert!(shown.coin_items.iter().all(|s| !s.reason.contains("takes turns")));
 }
 
 // Mineral Sand is plentiful here while Wood Blocks set the pace, so the Kiln turns the spare sand
