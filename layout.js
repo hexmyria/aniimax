@@ -54,9 +54,7 @@ export function layOut(pieces, options = {}) {
     // Within the open cells: the parts of it inside each cell add up to all of it.
     const inside = r => !cells || cells.reduce((sum, c) => sum + overlapArea(r, c), 0) >= r.w * r.h - EPSILON;
     const insideFuture = r => !futureCells || futureCells.reduce((sum, c) => sum + overlapArea(r, c), 0) >= r.w * r.h - EPSILON;
-    const shapes = pieces.map(piece => (piece.cluster
-        ? clusterOrientations(piece, piece.rotationQuarter)
-        : orientations(piece.members, piece.rotationQuarter)));
+    const shapes = pieces.map(piece => (piece.cluster ? clusterOrientations(piece) : orientations(piece.members)));
     const membersOf = piece => (piece.cluster ? [...piece.buildings.map(b => ({ ...b, weight: 0 })), ...piece.plots] : piece.members);
     const weightOf = piece => membersOf(piece).reduce((sum, m) => sum + m.weight, 0);
     const areaOf = piece => membersOf(piece).reduce((sum, m) => sum + m.w * m.h, 0);
@@ -257,7 +255,7 @@ export function layOut(pieces, options = {}) {
             const source = piece.cluster ? [...piece.buildings, ...piece.plots] : piece.members;
             return {
                 ...piece,
-                members: spot.rects.map((r, j) => ({ ...source[j], x: r.x, y: r.y, w: r.w, h: r.h, storageIndex: piece.storageIndex || 0, layoutKey: piece.layoutKey })),
+                members: spot.rects.map((r, j) => ({ ...source[j], x: r.x, y: r.y, w: r.w, h: r.h, storageIndex: piece.storageIndex || 0, layoutGroup: piece.layoutGroup })),
                 cost: spot.cost,
             };
         }),
@@ -308,7 +306,7 @@ export function layOutHomeland(pieces, cells, storage = { w: 2, h: 2 }, futureCe
 // Human-readable multi-storage layout. Facility groups are assigned to separate storage anchors;
 // every facility type stays with one anchor, so identical processors remain together rather than
 // being interleaved merely to shave a fraction off the hauling distance.
-export function layOutZonedHomeland(pieces, cells, storageCount, storage = { w: 2, h: 2 }, futureCells = cells) {
+export function layOutZonedHomeland(pieces, cells, storageCount, storage = { w: 2, h: 2 }, futureCells = cells, districtRotations = {}) {
     if (storageCount <= 1) return layOutHomeland(pieces, cells, storage, futureCells);
     const fits = at => {
         const r = { x: at.x - storage.w / 2, y: at.y - storage.h / 2, w: storage.w, h: storage.h };
@@ -416,7 +414,70 @@ export function layOutZonedHomeland(pieces, cells, storageCount, storage = { w: 
     // the last anchor rather than dropping them.
     pieces.forEach(piece => { if (!Number.isInteger(piece.storageIndex)) piece.storageIndex = storages.length - 1; });
     const out = layOut(pieces, { cells, futureCells, storages });
-    return { ...out, storageAt: null };
+    return { ...rotateLayoutDistricts(out, cells, districtRotations), storageAt: null };
+}
+
+// Rotates complete production districts around their own bounding-box centre after the automatic
+// layout. The district's facilities and Storage Units move together; an unsafe turn is rejected.
+export function rotateLayoutDistricts(layout, cells, rotations = {}) {
+    const result = {
+        ...layout,
+        storages: layout.storages.map(storage => ({ ...storage })),
+        pieces: layout.pieces.map(piece => ({ ...piece, members: piece.members.map(member => ({ ...member })) })),
+        rejectedRotations: [],
+    };
+    const districtOf = name => name === 'food' || name === 'industry' ? 'work' : name;
+    const inside = rect => cells.reduce((sum, cell) => sum + overlapArea(rect, cell), 0) >= rect.w * rect.h - EPSILON;
+    const turnRect = (rect, turns, center) => {
+        let out = { ...rect };
+        for (let i = 0; i < turns; i++) {
+            out = {
+                ...out,
+                x: snap(center.x - (out.y + out.h - center.y)),
+                y: snap(center.y + (out.x - center.x)),
+                w: out.h,
+                h: out.w,
+            };
+        }
+        return out;
+    };
+    for (const [district, rawTurns] of Object.entries(rotations)) {
+        const turns = ((Number(rawTurns) || 0) % 4 + 4) % 4;
+        if (!turns) continue;
+        const pieceIndices = result.pieces.map((piece, i) => districtOf(piece.layoutGroup) === district ? i : -1).filter(i => i >= 0);
+        const storageIndices = result.storages.map((storage, i) => districtOf(storage.label) === district ? i : -1).filter(i => i >= 0);
+        const current = [
+            ...pieceIndices.flatMap(i => result.pieces[i].members),
+            ...storageIndices.map(i => result.storages[i]),
+        ];
+        if (!current.length) continue;
+        const bounds = {
+            x: Math.min(...current.map(r => r.x)), y: Math.min(...current.map(r => r.y)),
+            x2: Math.max(...current.map(r => r.x + r.w)), y2: Math.max(...current.map(r => r.y + r.h)),
+        };
+        const center = { x: (bounds.x + bounds.x2) / 2, y: (bounds.y + bounds.y2) / 2 };
+        const turnedPieces = new Map(pieceIndices.map(i => [i, result.pieces[i].members.map(member => turnRect(member, turns, center))]));
+        const turnedStorages = new Map(storageIndices.map(i => [i, turnRect(result.storages[i], turns, center)]));
+        const selected = [...turnedPieces.values()].flat().concat([...turnedStorages.values()]);
+        const other = result.pieces.filter((_, i) => !pieceIndices.includes(i)).flatMap(piece => piece.members)
+            .concat(result.storages.filter((_, i) => !storageIndices.includes(i)));
+        const selfOverlaps = selected.some((rect, i) => selected.slice(i + 1).some(otherRect => overlaps(rect, otherRect)));
+        const blocked = selected.some(rect => !inside(rect) || other.some(otherRect => overlaps(rect, otherRect)));
+        const selectedBuildings = selected.filter(rect => rect.building);
+        const otherBuildings = other.filter(rect => rect.building);
+        const coverage = rect => ({ x: rect.x + rect.w / 2 - RADIUS, y: rect.y + rect.h / 2 - RADIUS, w: RADIUS * 2, h: RADIUS * 2 });
+        const coverageConflict = selectedBuildings.some(building => otherBuildings.some(otherBuilding => overlaps(coverage(building), coverage(otherBuilding))))
+            || selected.filter(rect => rect.sensitive).some(rect => otherBuildings.some(building => overlaps(rect, coverage(building))))
+            || other.filter(rect => rect.sensitive).some(rect => selectedBuildings.some(building => overlaps(rect, coverage(building))));
+        if (selfOverlaps || blocked || coverageConflict) {
+            result.rejectedRotations.push(district);
+            continue;
+        }
+        turnedPieces.forEach((members, i) => { result.pieces[i].members = members; });
+        turnedStorages.forEach((storageRect, i) => { Object.assign(result.storages[i], storageRect); });
+    }
+    result.storage = result.storages[0] || result.storage;
+    return result;
 }
 
 // Puts `plots` on `slots` (the plan's own arrangement, one slot per plot, each slot sized for the
@@ -475,11 +536,10 @@ function packPlots(plots, squares, allowed, free, buildings, anchor = { x: 0, y:
 
 // A rigid piece turned 0 to 3 quarter turns, each with its members' weighted center, used to
 // sweep it outward, and how far its members spread from that center.
-function orientations(members, onlyTurns = null) {
+function orientations(members) {
     const seen = new Set();
     const out = [];
-    const turnsToTry = Number.isInteger(onlyTurns) ? [((onlyTurns % 4) + 4) % 4] : [0, 1, 2, 3];
-    for (const turns of turnsToTry) {
+    for (let turns = 0; turns < 4; turns++) {
         const turned = members.map(m => turn(m, turns));
         const minX = Math.min(...turned.map(m => m.x));
         const minY = Math.min(...turned.map(m => m.y));
@@ -500,13 +560,12 @@ function orientations(members, onlyTurns = null) {
 
 // A cluster turned 0 to 3 quarter turns and mirrored or not, which turns its plan's arrangement
 // with it; swept outward by its first building's center.
-function clusterOrientations(cluster, onlyTurns = null) {
+function clusterOrientations(cluster) {
     const pair = cluster.buildings.length > 1;
     const out = [];
     const mirror = r => ({ ...r, x: -(r.x + r.w) });
     for (let variant = 0; variant < 8; variant++) {
         const turns = variant % 4;
-        if (Number.isInteger(onlyTurns) && turns !== ((onlyTurns % 4) + 4) % 4) continue;
         const flip = variant >= 4 ? mirror : (r => r);
         const buildings = cluster.buildings.map(b => turn(flip(b), turns));
         const planned = cluster.plots.map((p, j) => turn(flip({ ...cluster.planned[j], w: p.w, h: p.h }), turns));

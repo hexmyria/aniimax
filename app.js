@@ -1376,21 +1376,7 @@ function homelandPieces(plan, input) {
         member.powered = true;
         member.powerDemand = draws?.[Math.min(level, draws.length) - 1] || 0;
     }));
-    const occurrences = new Map();
-    const bundled = bundleLayoutFacilities(pieces).map(piece => {
-        const facility = piece.cluster ? piece.buildings[0]?.facility : piece.members[0]?.facility;
-        const base = `${piece.layoutGroup || 'other'}|${facility || 'block'}`;
-        const occurrence = occurrences.get(base) || 0;
-        occurrences.set(base, occurrence + 1);
-        const layoutKey = `${base}|${occurrence}`;
-        return {
-            ...piece,
-            layoutKey,
-            layoutLabel: `${facility || 'Block'}${occurrence ? ` ${occurrence + 1}` : ''}`,
-            rotationQuarter: layoutRotations.get(layoutKey) || 0,
-        };
-    });
-    return { pieces: bundled, unplaced: [...unplaced] };
+    return { pieces: bundleLayoutFacilities(pieces), unplaced: [...unplaced] };
 }
 
 // Colors for the layout: crops and Aniimo materials as in the environment maps, the rest by
@@ -1408,7 +1394,7 @@ const initialsOf = name => name.split(/[\s-]+/).map(w => w[0]).join('').toUpperC
 
 let layoutRunId = 0;
 let layoutWorker = null;
-const layoutRotations = new Map();
+const layoutRotations = new Map([['farm', 0], ['primary', 0], ['work', 0]]);
 
 // Every plot of the homeland, `{ number, x, y, w, h }` in tiles, with the top left at the origin.
 function homelandPlots() {
@@ -1435,12 +1421,12 @@ function attachLayoutHandlers() {
         if (layoutSim) resetLayoutSim(layoutSim);
     });
     const diagram = document.getElementById('layout-diagram');
-    const rotateKey = key => {
-        if (!key) return;
-        layoutRotations.set(key, ((layoutRotations.get(key) || 0) + 1) % 4);
+    const rotateKey = group => {
+        if (!layoutRotations.has(group)) return;
+        layoutRotations.set(group, ((layoutRotations.get(group) || 0) + 1) % 4);
         renderHomelandLayout(lastPlan);
     };
-    const rotate = target => rotateKey(target?.closest?.('[data-layout-key]')?.dataset.layoutKey);
+    const rotate = target => rotateKey(target?.closest?.('[data-layout-group]')?.dataset.layoutGroup);
     diagram.addEventListener('click', event => rotate(event.target));
     diagram.addEventListener('keydown', event => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -1479,8 +1465,11 @@ function renderHomelandLayout(plan) {
     const { pieces, unplaced } = homelandPieces(plan, lastPlanInput);
     const rotationSelect = document.getElementById('layout-rotate-block');
     const selectedRotationKey = rotationSelect.value;
-    rotationSelect.innerHTML = pieces.map(piece => `<option value="${escapeText(piece.layoutKey)}">${escapeText(piece.layoutLabel)} · ${piece.rotationQuarter * 90}°</option>`).join('');
-    if (pieces.some(piece => piece.layoutKey === selectedRotationKey)) rotationSelect.value = selectedRotationKey;
+    const rotationGroups = [
+        ['farm', 'Farming block'], ['primary', 'Primary industry block'], ['work', 'Processing block'],
+    ];
+    rotationSelect.innerHTML = rotationGroups.map(([group, label]) => `<option value="${group}">${label} · ${(layoutRotations.get(group) || 0) * 90}°</option>`).join('');
+    if (rotationGroups.some(([group]) => group === selectedRotationKey)) rotationSelect.value = selectedRotationKey;
     const homeLevel = layoutHomeLevel();
     const cells = homelandPlots().filter(p => p.number <= homeLevel);
     if (layoutWorker) layoutWorker.terminate();
@@ -1522,6 +1511,7 @@ function renderHomelandLayout(plan) {
             unplaced.length ? `Not placed, size unknown: ${unplaced.join(', ')}.` : '',
             layout.powerGrid?.unpowered.length ? `${layout.powerGrid.unpowered.length} selected E-mode facilit${layout.powerGrid.unpowered.length === 1 ? 'y is' : 'ies are'} outside the available power grid.` : '',
             layout.powerGrid?.demand > layout.powerGrid?.supply ? `Selected E-mode facilities exceed generator output by ${layout.powerGrid.demand - layout.powerGrid.supply}.` : '',
+            layout.rejectedRotations?.length ? `Could not rotate: ${layout.rejectedRotations.map(group => STORAGE_GROUP_LABELS[group] || group).join(', ')}.` : '',
         ].filter(Boolean).join(' ');
         const storageCount = (layout.storages || [layout.storage]).length;
         const power = layout.powerGrid;
@@ -1545,6 +1535,7 @@ function renderHomelandLayout(plan) {
         cells: cells.map(({ x, y, w, h }) => ({ x, y, w, h })),
         futureCells: homelandPlots().map(({ x, y, w, h }) => ({ x, y, w, h })),
         storageCount: STORAGE_UNIT_MAX[homeLevel - 1] || 1,
+        districtRotations: Object.fromEntries(layoutRotations),
     });
 }
 
@@ -1571,8 +1562,8 @@ function storageForMember(layout, member) {
 }
 
 function homelandSvg(layout, homeLevel) {
-    const rotateAttrs = member => member.layoutKey
-        ? `data-layout-key="${escapeText(member.layoutKey)}" tabindex="0" role="button" aria-label="${escapeText(member.facility)}: Rotate 90 degrees"`
+    const rotateAttrs = member => member.layoutGroup
+        ? `data-layout-group="${member.layoutGroup === 'food' || member.layoutGroup === 'industry' ? 'work' : member.layoutGroup}" tabindex="0" role="button" aria-label="${escapeText(member.facility)}: Rotate block 90 degrees"`
         : '';
     // Each environment building in use covers the 9x9 square around its center, drawn under
     // everything in its mode's color as on the building's own map.
