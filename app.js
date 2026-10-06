@@ -1365,8 +1365,8 @@ function homelandPieces(plan, input) {
         const building = f.name in ENVIRONMENT_BUILDING_SIZES;
         for (let i = 0; i < extra; i++) pieces.push({ members: [{ x: 0, y: 0, w: footprint[0], h: footprint[1], weight: 0, facility: f.name, crop: null, building, mode: null }] });
     });
-    // Power is a layout preference, not a solver input. Only active copies are marked: idle
-    // owned machines do not consume grid capacity merely because their facility type is selected.
+    // Power is a layout preference, not a solver input. Selected idle copies are included so the
+    // suggested wiring is ready before the production plan needs them.
     pieces.forEach(piece => (piece.members || piece.plots || []).forEach(member => {
         // E-mode is a placement choice for owned equipment, including processors the current
         // production plan leaves idle. This reserves wiring before that recipe is needed.
@@ -1376,7 +1376,21 @@ function homelandPieces(plan, input) {
         member.powered = true;
         member.powerDemand = draws?.[Math.min(level, draws.length) - 1] || 0;
     }));
-    return { pieces: bundleLayoutFacilities(pieces), unplaced: [...unplaced] };
+    const occurrences = new Map();
+    const bundled = bundleLayoutFacilities(pieces).map(piece => {
+        const facility = piece.cluster ? piece.buildings[0]?.facility : piece.members[0]?.facility;
+        const base = `${piece.layoutGroup || 'other'}|${facility || 'block'}`;
+        const occurrence = occurrences.get(base) || 0;
+        occurrences.set(base, occurrence + 1);
+        const layoutKey = `${base}|${occurrence}`;
+        return {
+            ...piece,
+            layoutKey,
+            layoutLabel: `${facility || 'Block'}${occurrence ? ` ${occurrence + 1}` : ''}`,
+            rotationQuarter: layoutRotations.get(layoutKey) || 0,
+        };
+    });
+    return { pieces: bundled, unplaced: [...unplaced] };
 }
 
 // Colors for the layout: crops and Aniimo materials as in the environment maps, the rest by
@@ -1394,6 +1408,7 @@ const initialsOf = name => name.split(/[\s-]+/).map(w => w[0]).join('').toUpperC
 
 let layoutRunId = 0;
 let layoutWorker = null;
+const layoutRotations = new Map();
 
 // Every plot of the homeland, `{ number, x, y, w, h }` in tiles, with the top left at the origin.
 function homelandPlots() {
@@ -1418,6 +1433,22 @@ function attachLayoutHandlers() {
     });
     document.getElementById('layout-replay').addEventListener('click', () => {
         if (layoutSim) resetLayoutSim(layoutSim);
+    });
+    const diagram = document.getElementById('layout-diagram');
+    const rotateKey = key => {
+        if (!key) return;
+        layoutRotations.set(key, ((layoutRotations.get(key) || 0) + 1) % 4);
+        renderHomelandLayout(lastPlan);
+    };
+    const rotate = target => rotateKey(target?.closest?.('[data-layout-key]')?.dataset.layoutKey);
+    diagram.addEventListener('click', event => rotate(event.target));
+    diagram.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        rotate(event.target);
+    });
+    document.getElementById('layout-rotate').addEventListener('click', () => {
+        rotateKey(document.getElementById('layout-rotate-block').value);
     });
 }
 
@@ -1446,6 +1477,10 @@ function renderHomelandLayout(plan) {
     document.getElementById('layout-diagram').innerHTML = '';
     // Worked out in a worker of its own: a large homeland takes a few seconds.
     const { pieces, unplaced } = homelandPieces(plan, lastPlanInput);
+    const rotationSelect = document.getElementById('layout-rotate-block');
+    const selectedRotationKey = rotationSelect.value;
+    rotationSelect.innerHTML = pieces.map(piece => `<option value="${escapeText(piece.layoutKey)}">${escapeText(piece.layoutLabel)} · ${piece.rotationQuarter * 90}°</option>`).join('');
+    if (pieces.some(piece => piece.layoutKey === selectedRotationKey)) rotationSelect.value = selectedRotationKey;
     const homeLevel = layoutHomeLevel();
     const cells = homelandPlots().filter(p => p.number <= homeLevel);
     if (layoutWorker) layoutWorker.terminate();
@@ -1536,6 +1571,9 @@ function storageForMember(layout, member) {
 }
 
 function homelandSvg(layout, homeLevel) {
+    const rotateAttrs = member => member.layoutKey
+        ? `data-layout-key="${escapeText(member.layoutKey)}" tabindex="0" role="button" aria-label="${escapeText(member.facility)}: Rotate 90 degrees"`
+        : '';
     // Each environment building in use covers the 9x9 square around its center, drawn under
     // everything in its mode's color as on the building's own map.
     const coverage = layout.pieces.flatMap(p => p.members)
@@ -1581,14 +1619,14 @@ function homelandSvg(layout, homeLevel) {
         const fill = m.building ? 0.9 : m.weight > 0 ? 0.35 + 0.55 * Math.sqrt(m.weight / maxTrips) : 0.08;
         if (m.building) {
             // As on the building's own map: its mode's color, with the game's symbol for it.
-            return `<g class="env-building" ${tip}><rect x="${m.x + 0.05}" y="${m.y + 0.05}" width="${m.w - 0.1}" height="${m.h - 0.1}" rx="0.3"
+            return `<g class="env-building layout-rotatable" ${rotateAttrs(m)} ${tip}><rect x="${m.x + 0.05}" y="${m.y + 0.05}" width="${m.w - 0.1}" height="${m.h - 0.1}" rx="0.3"
                 fill="${color}" fill-opacity="${m.mode ? 1 : 0.25}" stroke="currentColor" stroke-opacity="0.6" stroke-width="0.08" />
                 ${m.mode ? environmentBuildingIcon(m.facility, m.mode, m.x + m.w / 2, m.y + m.h / 2) : ''}</g>`;
         }
         if (m.reserved) {
-            return `<g class="layout-piece layout-future-slot" ${tipAttrs(m.facility, { detail: 'Future expansion slot', color })}><rect x="${m.x + 0.08}" y="${m.y + 0.08}" width="${m.w - 0.16}" height="${m.h - 0.16}" rx="0.2" stroke="${color}" />${label}</g>`;
+            return `<g class="layout-piece layout-future-slot layout-rotatable" ${rotateAttrs(m)} ${tipAttrs(m.facility, { detail: 'Future expansion slot', color })}><rect x="${m.x + 0.08}" y="${m.y + 0.08}" width="${m.w - 0.16}" height="${m.h - 0.16}" rx="0.2" stroke="${color}" />${label}</g>`;
         }
-        return `<g class="layout-piece${m.powered ? ' layout-powered' : ''}" ${tip}><rect x="${m.x + 0.04}" y="${m.y + 0.04}" width="${m.w - 0.08}" height="${m.h - 0.08}" rx="0.2"
+        return `<g class="layout-piece layout-rotatable${m.powered ? ' layout-powered' : ''}" ${rotateAttrs(m)} ${tip}><rect x="${m.x + 0.04}" y="${m.y + 0.04}" width="${m.w - 0.08}" height="${m.h - 0.08}" rx="0.2"
             fill="${color}" fill-opacity="${fill.toFixed(2)}" stroke="${color}" stroke-width="0.06" />${label}</g>`;
     }).join('');
     const coverageShapes = coverage.map(c => {

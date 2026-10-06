@@ -54,7 +54,9 @@ export function layOut(pieces, options = {}) {
     // Within the open cells: the parts of it inside each cell add up to all of it.
     const inside = r => !cells || cells.reduce((sum, c) => sum + overlapArea(r, c), 0) >= r.w * r.h - EPSILON;
     const insideFuture = r => !futureCells || futureCells.reduce((sum, c) => sum + overlapArea(r, c), 0) >= r.w * r.h - EPSILON;
-    const shapes = pieces.map(piece => (piece.cluster ? clusterOrientations(piece) : orientations(piece.members)));
+    const shapes = pieces.map(piece => (piece.cluster
+        ? clusterOrientations(piece, piece.rotationQuarter)
+        : orientations(piece.members, piece.rotationQuarter)));
     const membersOf = piece => (piece.cluster ? [...piece.buildings.map(b => ({ ...b, weight: 0 })), ...piece.plots] : piece.members);
     const weightOf = piece => membersOf(piece).reduce((sum, m) => sum + m.weight, 0);
     const areaOf = piece => membersOf(piece).reduce((sum, m) => sum + m.w * m.h, 0);
@@ -255,7 +257,7 @@ export function layOut(pieces, options = {}) {
             const source = piece.cluster ? [...piece.buildings, ...piece.plots] : piece.members;
             return {
                 ...piece,
-                members: spot.rects.map((r, j) => ({ ...source[j], x: r.x, y: r.y, w: r.w, h: r.h, storageIndex: piece.storageIndex || 0 })),
+                members: spot.rects.map((r, j) => ({ ...source[j], x: r.x, y: r.y, w: r.w, h: r.h, storageIndex: piece.storageIndex || 0, layoutKey: piece.layoutKey })),
                 cost: spot.cost,
             };
         }),
@@ -473,10 +475,11 @@ function packPlots(plots, squares, allowed, free, buildings, anchor = { x: 0, y:
 
 // A rigid piece turned 0 to 3 quarter turns, each with its members' weighted center, used to
 // sweep it outward, and how far its members spread from that center.
-function orientations(members) {
+function orientations(members, onlyTurns = null) {
     const seen = new Set();
     const out = [];
-    for (let turns = 0; turns < 4; turns++) {
+    const turnsToTry = Number.isInteger(onlyTurns) ? [((onlyTurns % 4) + 4) % 4] : [0, 1, 2, 3];
+    for (const turns of turnsToTry) {
         const turned = members.map(m => turn(m, turns));
         const minX = Math.min(...turned.map(m => m.x));
         const minY = Math.min(...turned.map(m => m.y));
@@ -497,12 +500,13 @@ function orientations(members) {
 
 // A cluster turned 0 to 3 quarter turns and mirrored or not, which turns its plan's arrangement
 // with it; swept outward by its first building's center.
-function clusterOrientations(cluster) {
+function clusterOrientations(cluster, onlyTurns = null) {
     const pair = cluster.buildings.length > 1;
     const out = [];
     const mirror = r => ({ ...r, x: -(r.x + r.w) });
     for (let variant = 0; variant < 8; variant++) {
         const turns = variant % 4;
+        if (Number.isInteger(onlyTurns) && turns !== ((onlyTurns % 4) + 4) % 4) continue;
         const flip = variant >= 4 ? mirror : (r => r);
         const buildings = cluster.buildings.map(b => turn(flip(b), turns));
         const planned = cluster.plots.map((p, j) => turn(flip({ ...cluster.planned[j], w: p.w, h: p.h }), turns));

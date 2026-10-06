@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aniimax - Aniimo Production Optimizer</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=rotate-blocks1">
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
@@ -305,14 +305,20 @@
                         <p class="hint" id="layout-summary"></p>
                         <details class="explain">
                             <summary>How it's laid out</summary>
-                            <p>The layout uses the maximum Storage Units your RV level allows and gives each one a readable production zone: farming, gathering and resident facilities, food processing, or crafting and industry. With fewer Storage Units, related zones are combined. Facilities of the same type stay together. Within each zone, busy facilities sit nearest its Storage Unit while environment coverage remains exactly as planned. Hover or tap a facility for its trips and distance. The diagram simulates batches against one shared inventory; carrying time is shown but does not delay production.</p>
-                            <p>Food processing and crafting/industry form one workshop district, but their Storage Units are separated so each sits near its own facilities instead of behaving like one large drop-off point. Gathering, food and industry facilities use stable Lv.20-sized islands: dashed outlines are future expansion slots, so later copies can be added without rearranging the existing machines. Farming remains flexible because its environment layouts change as plots are added.</p>
+                            <p>The layout uses the maximum Storage Units your RV level allows. Farming, gathering/resident facilities, and the combined workshop district each receive one first; extra Storage Units follow the plan's hauling demand. Facilities of the same type stay together. Within each zone, busy facilities sit nearest its Storage Unit while environment coverage remains exactly as planned. Hover or tap a facility for its trips and distance. The diagram simulates batches against one shared inventory; carrying time is shown but does not delay production.</p>
+                            <p>Food processing and crafting/industry form one workshop district. When a district receives two Storage Units, they keep separate catchment areas without being scattered across the homeland. Gathering and workshop facilities use stable Lv.20-sized islands: dashed outlines are future expansion slots, so later copies can be added without rearranging the existing machines. Farming remains flexible because its environment layouts change as plots are added.</p>
                             <p>From RV 12, choose E-mode in the facility table to add a Crackle Generator and the minimum connected Power Poles needed to reach those selected owned facilities, including idle ones. The summary compares their power demand with generator output. This is a placement preview only; it does not change the plan's production rates.</p>
+                            <p>Click or tap a facility block to rotate that whole block 90 degrees and lay the homeland out again. Keyboard users can focus a block and press Enter or Space. If that direction cannot fit, the block is listed as unplaced until you rotate it again.</p>
                         </details>
                         <div class="layout-controls">
                             <span class="layout-toggles">
                                 <label class="layout-whole"><input type="checkbox" id="layout-whole"> Show the whole homeland</label>
                                 <label class="layout-whole"><input type="checkbox" id="layout-sim-on" checked> Simulate</label>
+                            </span>
+                            <span class="layout-rotate-controls">
+                                <label for="layout-rotate-block">Block</label>
+                                <select id="layout-rotate-block"></select>
+                                <button type="button" class="toggle-button small" id="layout-rotate">Rotate 90°</button>
                             </span>
                             <span class="layout-sim" id="layout-sim" hidden><span id="layout-clock">0h 00m</span><button type="button" class="toggle-button small" id="layout-replay">Replay</button></span>
                         </div>
@@ -560,7 +566,7 @@
             }
         });
     </script>
-    <script type="module" src="i18n.js?v=ja18"></script>
-    <script type="module" src="app.js?v=compact-storage1"></script>
+    <script type="module" src="i18n.js?v=ja19"></script>
+    <script type="module" src="app.js?v=rotate-blocks1"></script>
 </body>
 </html>
