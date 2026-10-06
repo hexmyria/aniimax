@@ -2539,6 +2539,29 @@ tr:hover .skip-row,
     overflow: auto;
 }
 
+.layout-rotatable {
+    cursor: pointer;
+}
+
+.layout-rotatable:focus {
+    outline: none;
+}
+
+.layout-rotatable:focus rect {
+    stroke: #fff;
+    stroke-width: 0.14;
+}
+
+.layout-rotate-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.layout-rotate-controls select {
+    max-width: 13rem;
+}
+
 .layout-svg {
     width: 100%;
     max-height: 90vh;

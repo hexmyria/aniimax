@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { layOutZonedHomeland } from '../web/layout.js';
+import { layOut, layOutZonedHomeland } from '../web/layout.js';
 import { STORAGE_UNIT_MAX } from '../web/facility-config.js';
 
 test('storage unit cap follows the RV level', () => {
@@ -9,6 +9,23 @@ test('storage unit cap follows the RV level', () => {
     assert.equal(STORAGE_UNIT_MAX[3], 2);
     assert.equal(STORAGE_UNIT_MAX[10], 4);
     assert.equal(STORAGE_UNIT_MAX[19], 8);
+});
+
+test('a block can be constrained to a requested quarter turn', () => {
+    const result = layOut([{
+        layoutKey: 'industry|test|0',
+        rotationQuarter: 1,
+        members: [
+            { x: 0, y: 0, w: 2, h: 1, weight: 1, facility: 'Test A' },
+            { x: 2, y: 0, w: 1, h: 1, weight: 1, facility: 'Test B' },
+        ],
+    }]);
+    const members = result.pieces[0].members;
+    const width = Math.max(...members.map(m => m.x + m.w)) - Math.min(...members.map(m => m.x));
+    const height = Math.max(...members.map(m => m.y + m.h)) - Math.min(...members.map(m => m.y));
+    assert.equal(width, 1);
+    assert.equal(height, 3);
+    assert.ok(members.every(member => member.layoutKey === 'industry|test|0'));
 });
 
 test('four-storage layout merges workshops and assigns the spare by hauling demand', () => {
