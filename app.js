@@ -1368,7 +1368,9 @@ function homelandPieces(plan, input) {
     // Power is a layout preference, not a solver input. Only active copies are marked: idle
     // owned machines do not consume grid capacity merely because their facility type is selected.
     pieces.forEach(piece => (piece.members || piece.plots || []).forEach(member => {
-        if (!poweredFacilities.has(member.facility) || !(member.weight > 0)) return;
+        // E-mode is a placement choice for owned equipment, including processors the current
+        // production plan leaves idle. This reserves wiring before that recipe is needed.
+        if (!poweredFacilities.has(member.facility)) return;
         const draws = ELECTRIC_FACILITY_POWER[member.facility];
         const level = Math.max(1, tierLevel(input.facilities[member.facility]));
         member.powered = true;
@@ -3213,7 +3215,7 @@ function planRows(rows, showMinimumLevel = false, sharedUtilization = new Map())
             ? '—'
             : `${formatPercent(utilization)}${total == null ? '' : `<span class="utilization-total">facility total ${formatPercent(total)}</span>`}`;
         const electric = ELECTRIC_FACILITY_POWER[step.facility];
-        const canPower = electric && step.status === 'producing' && layoutHomeLevel() >= POWER_GRID.unlockRv;
+        const canPower = electric && step.facility_count > 0 && layoutHomeLevel() >= POWER_GRID.unlockRv;
         const powerControl = electric
             ? `<label class="power-choice" title="Display this facility type on the Crackle power grid; production calculations are unchanged"><input type="checkbox" data-power-facility="${step.facility}" ${poweredFacilities.has(step.facility) ? 'checked' : ''} ${canPower ? '' : 'disabled'}><span>${canPower ? 'Use' : `RV ${POWER_GRID.unlockRv}+`}</span></label>`
             : '—';
