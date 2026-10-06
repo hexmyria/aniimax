@@ -319,14 +319,15 @@ export function layOutZonedHomeland(pieces, cells, storageCount, storage = { w: 
             x: candidates.reduce((sum, c) => sum + c.x, 0) / candidates.length,
             y: candidates.reduce((sum, c) => sum + c.y, 0) / candidates.length,
         };
-        // Food and industry are one workshop district: their two Storage Units physically touch
-        // side by side. Prefer a horizontal pair at the centre of an open plot, which is easy to
-        // reproduce in game and leaves a shared strip for power utilities around both zones.
+        // Food and industry are one workshop district, but their Storage Units have separate
+        // catchment areas. Ten tiles between their centres is far enough to shorten trips on both
+        // sides without splitting the two related processing zones across the homeland.
+        const workshopStorageGap = 10;
         const pairs = cells.flatMap(cell => {
             const cy = cell.y + cell.h / 2;
             const cx = cell.x + cell.w / 2;
-            const a = { x: cx - storage.w / 2, y: cy };
-            const b = { x: cx + storage.w / 2, y: cy };
+            const a = { x: cx - workshopStorageGap / 2, y: cy };
+            const b = { x: cx + workshopStorageGap / 2, y: cy };
             return fits(a) && fits(b) ? [{ a, b, centrality: Math.hypot(cx - center.x, cy - center.y) }] : [];
         });
         const pair = pairs.sort((a, b) => a.centrality - b.centrality)[0];

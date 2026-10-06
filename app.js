@@ -1566,11 +1566,13 @@ function homelandSvg(layout, homeLevel) {
         const storage = storageForMember(layout, m);
         const away = Math.hypot(m.x + m.w / 2 - (storage.x + storage.w / 2), m.y + m.h / 2 - (storage.y + storage.h / 2));
         const tip = tipAttrs(m.facility, {
-            detail: m.jobs ? m.jobs.map(j => prettyItem(j.item)).join(', ') : m.crop ? prettyItem(m.crop) : m.building && m.mode ? m.mode : 'Idle',
+            detail: m.jobs?.length > 1
+                ? `Alternates one at a time: ${m.jobs.map(j => prettyItem(j.item)).join(' → ')}`
+                : m.jobs ? prettyItem(m.jobs[0]?.item) : m.crop ? prettyItem(m.crop) : m.building && m.mode ? m.mode : 'Idle',
             stats: m.weight > 0 ? `${formatRate(m.weight)} trips/hour · ${away.toFixed(1)} tiles from storage` : '',
             color,
         });
-        const label = Math.min(m.w, m.h) >= 1.5 ? `<text x="${m.x + m.w / 2}" y="${m.y + m.h / 2}" font-size="${Math.min(0.8, m.w / 3)}">${initialsOf(m.facility)}</text>` : '';
+        const label = Math.min(m.w, m.h) >= 1.5 ? `<text x="${m.x + m.w / 2}" y="${m.y + m.h / 2}" font-size="${Math.min(0.8, m.w / 3)}">${initialsOf(m.facility)}${m.jobs?.length > 1 ? '↻' : ''}</text>` : '';
         // Busier pieces are filled more solidly; idle ones are an outline.
         const fill = m.building ? 0.9 : m.weight > 0 ? 0.35 + 0.55 * Math.sqrt(m.weight / maxTrips) : 0.08;
         if (m.building) {
