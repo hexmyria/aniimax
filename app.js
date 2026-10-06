@@ -8,7 +8,7 @@ import {
 } from './facility-config.js?v=power-size1';
 import { createShareUrl, readShareHash, urlWithoutShare } from './share-config.js';
 import { sharedFacilityUtilization, theoreticalUtilization } from './utilization.js?v=1';
-import { routePowerGrid } from './power-layout.js?v=1';
+import { routePowerGrid } from './power-layout.js?v=full-coverage1';
 
 let wasmReady = false;
 

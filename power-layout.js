@@ -37,7 +37,10 @@ export function routePowerGrid({ targets, occupied, cells, generatorFootprint = 
     }, null).rect;
     const fields = [{ ...fieldFor(generator, generatorCoverage), source: 'generator' }];
     const poles = [];
-    const isPowered = target => fields.some(field => intersects(field, target));
+    // A machine is usable only when its complete footprint is inside a powered field. Treating
+    // a field that merely clips one edge as powered can leave the far side of a large workshop
+    // (notably a Woodworking Bench) visibly outside the grid.
+    const isPowered = target => fields.some(field => inside(target, field));
     let unpowered = targets.filter(target => !isPowered(target));
 
     while (unpowered.length && poles.length < poleCap) {
@@ -49,7 +52,7 @@ export function routePowerGrid({ targets, occupied, cells, generatorFootprint = 
         let best = null;
         for (const pole of poleCandidates) {
             const field = fieldFor(pole, poleCoverage);
-            const newlyPowered = unpowered.filter(target => intersects(field, target));
+            const newlyPowered = unpowered.filter(target => inside(target, field));
             const distance = Math.min(...unpowered.map(target => centerDistance(pole, target)));
             const score = newlyPowered.length * 100000 - distance;
             if (!best || score > best.score) best = { pole, field, newlyPowered, score };
