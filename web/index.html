@@ -304,7 +304,7 @@
                         <p class="hint" id="layout-summary"></p>
                         <details class="explain">
                             <summary>How it's laid out</summary>
-                            <p>Every finished batch is carried to the Storage Unit (SU), so each facility is placed by its trips per hour times its straight-line distance to it: the busiest sit closest, idle ones go to the edge. Each environment building's plots can go anywhere its coverage still reaches them, so they sit on its Storage Unit side. No covered plot reaches another building's coverage, and a crop that needs an environment but is grown without one stays out of all of it, so every crop keeps the temperature the plan gave it. Crops that need no environment can go anywhere. Everything stays within the plots your RV level has open (each 20 by 15 tiles; in Advanced mode, the lowest RV level that allows what you entered), and the Storage Unit goes wherever the walking comes out least. Hover or tap a facility for its trips and distance. The diagram plays the homeland out in sped-up game time from when everything is set up: each finished batch goes to the Storage Unit (carrying takes no time here), and a recipe starts only once what it takes is there. A ring on each facility shows its batch, amber while it waits for materials. This is a close-packed arrangement worked out step by step, not a proven shortest one.</p>
+                            <p>The layout uses the maximum Storage Units your RV level allows and gives each one a readable production zone: farming, gathering and resident facilities, food processing, or crafting and industry. With fewer Storage Units, related zones are combined. Facilities of the same type stay together. Within each zone, busy facilities sit nearest its Storage Unit while environment coverage remains exactly as planned. Hover or tap a facility for its trips and distance. The diagram simulates batches against one shared inventory; carrying time is shown but does not delay production.</p>
                         </details>
                         <div class="layout-controls">
                             <span class="layout-toggles">
@@ -497,7 +497,7 @@
                     <li><strong>Profit by Product</strong>: with Level up, what each product earns per hour and in total until the level-up is ready.</li>
                     <li><strong>What Each Facility Should Do</strong>: what to set each facility to, all running at once. Recipes tagged "unverified" haven't been checked in game yet.</li>
                     <li><strong>Opportunities</strong>: changes within your reach (a recipe to unlock, an Aniimo level, and in Advanced mode a module or facility) ranked by how much they'd improve the plan.</li>
-                    <li><strong>Homeland Layout</strong>: where to put each facility so the busiest are nearest the Storage Unit.</li>
+                    <li><strong>Homeland Layout</strong>: a readable zoned arrangement around the maximum Storage Units your RV level allows.</li>
                     <li><strong>Set a Goal</strong>: with Priorities, how long it takes to reach a target amount of Home Coins or any priority that's on, and what else you'll have by then.</li>
                 </ul>
             </div>
@@ -557,7 +557,7 @@
             }
         });
     </script>
-    <script type="module" src="i18n.js?v=ja13"></script>
-    <script type="module" src="app.js?v=utilization1"></script>
+    <script type="module" src="i18n.js?v=ja14"></script>
+    <script type="module" src="app.js?v=zoned-layout1"></script>
 </body>
 </html>
