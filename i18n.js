@@ -39,6 +39,8 @@ const dynamic = {
   'Latest result':'最新の結果','Result saved in this browser.':'このブラウザに結果を保存しました。','Could not save this result.':'結果を保存できませんでした。','Saved result deleted.':'保存した結果を削除しました。','Restored the latest result from this browser.':'このブラウザから最新の結果を復元しました。','No named results saved yet.':'名前付きの保存結果はまだありません。','Saved results are unavailable in this browser.':'このブラウザでは保存結果を利用できません。','Name this result':'結果名','Open':'開く','Delete':'削除','season':'イベント','free':'無料','Nothing in this plan is carried to the Storage Unit.':'この計画では倉庫へ運搬するものはありません。','Not placed, size unknown:':'大きさが不明なため未配置：','No room found in':'配置スペースがありません：',
   'Not yet verified in game.':'ゲーム内未確認。',
   'Alternates one at a time:':'1つずつ切替：',
+  'Idle-friendly plan: each active level-up recipe has its own Woodworking Bench or Chimney Kiln and runs simultaneously.':'放置優先：稼働するレベルアップ素材ごとに木工台または煙突鍛造炉を専用化し、同時稼働します。',
+  'Not enough processors for dedicated operation, so this plan switches recipes on shared Woodworking Benches or Chimney Kilns.':'設備数が専用稼働に足りないため、木工台または煙突鍛造炉を共有してレシピを切り替える計画です。',
   'Selected E-mode facilities exceed generator output by':'選択した電力モード設備の消費電力が発電量を超えています。超過：','selected E-mode facilities are outside the available power grid.':'件の電力モード設備に配電できません。','selected E-mode facility is outside the available power grid.':'件の電力モード設備に配電できません。',
   'any level':'レベル不問','Coarse-Sifted Ore':'粗粒骨材','River-Washed Stones':'水磨き石','Premium River-Washed Stones':'上級水磨き石','Sugar-Roasted Chestnuts':'焼き甘栗','Flowers in a Bottle':'生け花',
   'Sowing crops':'作物の種まき','Reaping crops':'作物の収穫','Reclaiming crops':'作物の開墾','Collecting crops':'作物の採集','Watering crops':'作物への水やり','Logging crops':'作物の伐採',
