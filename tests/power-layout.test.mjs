@@ -25,6 +25,16 @@ test('a nearby selected facility uses generator coverage without a pole', () => 
     assert.deepEqual(grid.unpowered, []);
 });
 
+test('a facility clipped by a power field edge is not reported as powered', () => {
+    const target = { x: 3, y: 0, w: 1, h: 2 };
+    const grid = routePowerGrid({
+        targets: [target], occupied: [target], cells: [{ x: 0, y: 0, w: 4, h: 2 }],
+        generatorFootprint: [2, 2], generatorCoverage: 3, poleCap: 0,
+    });
+    assert.ok(grid.generator);
+    assert.deepEqual(grid.unpowered, [target]);
+});
+
 test('distant selected facilities are joined by a connected relay chain', () => {
     const targets = [{ x: 1, y: 5, w: 2, h: 2 }, { x: 36, y: 5, w: 2, h: 2 }];
     const grid = routePowerGrid({ targets, occupied: targets, cells, poleCap: 12 });
