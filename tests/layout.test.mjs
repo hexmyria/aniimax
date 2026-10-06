@@ -11,7 +11,7 @@ test('storage unit cap follows the RV level', () => {
     assert.equal(STORAGE_UNIT_MAX[19], 8);
 });
 
-test('zoned layout assigns categories to separate storage units', () => {
+test('four-storage layout merges workshops and assigns the spare by hauling demand', () => {
     const member = (facility, layoutGroup) => ({
         layoutGroup,
         members: [{ x: 0, y: 0, w: 1, h: 1, weight: 1, facility, crop: facility, cycle: 60 }],
@@ -30,9 +30,31 @@ test('zoned layout assigns categories to separate storage units', () => {
     assert.equal(result.storages.length, 4);
     assert.equal(result.unplaced.length, 0);
     assert.deepEqual(new Set(result.pieces.flatMap(piece => piece.members).map(m => m.storageIndex)), new Set([0, 1, 2, 3]));
-    const food = result.storages.find(storage => storage.label === 'food');
-    const industry = result.storages.find(storage => storage.label === 'industry');
-    assert.equal(Math.hypot(food.x - industry.x, food.y - industry.y), 10);
+    assert.equal(result.storages.filter(storage => storage.label === 'work').length, 2);
+    assert.equal(result.storages.filter(storage => storage.label === 'farm').length, 1);
+    assert.equal(result.storages.filter(storage => storage.label === 'primary').length, 1);
+});
+
+test('four-storage layout gives the spare warehouse to busy farming', () => {
+    const member = (facility, layoutGroup, weight) => ({
+        layoutGroup,
+        members: [{ x: 0, y: 0, w: 1, h: 1, weight, facility }],
+    });
+    const pieces = [
+        member('Farmland', 'farm', 20), member('Woodland', 'farm', 20),
+        member('Mine', 'primary', 1),
+        member('Jukebox Dryer', 'food', 1), member('Crafting Table', 'industry', 1),
+    ];
+    const cells = [
+        { x: 0, y: 0, w: 20, h: 15 }, { x: 20, y: 0, w: 20, h: 15 },
+        { x: 0, y: 15, w: 20, h: 15 }, { x: 20, y: 15, w: 20, h: 15 },
+    ];
+    const result = layOutZonedHomeland(pieces, cells, 4);
+    assert.equal(result.storages.filter(storage => storage.label === 'farm').length, 2);
+    const farmStorageIndices = new Set(result.pieces
+        .filter(piece => piece.layoutGroup === 'farm')
+        .flatMap(piece => piece.members.map(member => member.storageIndex)));
+    assert.equal(farmStorageIndices.size, 2);
 });
 
 test('future expansion slots may reserve locked plots while active facilities stay open', () => {
