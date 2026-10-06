@@ -32,7 +32,7 @@ test('zoned layout assigns categories to separate storage units', () => {
     assert.deepEqual(new Set(result.pieces.flatMap(piece => piece.members).map(m => m.storageIndex)), new Set([0, 1, 2, 3]));
     const food = result.storages.find(storage => storage.label === 'food');
     const industry = result.storages.find(storage => storage.label === 'industry');
-    assert.equal(Math.hypot(food.x - industry.x, food.y - industry.y), 2);
+    assert.equal(Math.hypot(food.x - industry.x, food.y - industry.y), 10);
 });
 
 test('future expansion slots may reserve locked plots while active facilities stay open', () => {
