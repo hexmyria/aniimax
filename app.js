@@ -5,7 +5,7 @@ import {
     MAX_HOME_LEVEL, ANIIMO_MAX, STORAGE_UNIT_MAX, simpleSetup,
     LEVEL_UP_COSTS, LEVEL_UP_CHAINS, SPECIAL_RECIPES, SEASON, ANIIPOD_TIERS, PERSONALITY_PAIRS, personalityLetter, opposedPersonality,
     facilityDisplayRank, ELECTRIC_FACILITY_POWER, POWER_GRID,
-} from './facility-config.js?v=season2';
+} from './facility-config.js?v=power-size1';
 import { createShareUrl, readShareHash, urlWithoutShare } from './share-config.js';
 import { sharedFacilityUtilization, theoreticalUtilization } from './utilization.js?v=1';
 import { routePowerGrid } from './power-layout.js?v=1';

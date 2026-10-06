@@ -315,7 +315,7 @@ export const ELECTRIC_FACILITY_POWER = Object.freeze({
 
 export const POWER_GRID = Object.freeze({
     unlockRv: 12,
-    generatorFootprint: [1, 1],
+    generatorFootprint: [2, 2],
     generatorCoverage: 11,
     poleFootprint: [1.5, 1.5],
     poleCoverage: 7,
