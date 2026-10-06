@@ -802,6 +802,8 @@ tbody tr:first-child td {
 .layout-power-utility rect { fill: #302a19; stroke: #f3c84b; stroke-width: 0.1; }
 .layout-power-utility text { fill: #ffe998; text-anchor: middle; dominant-baseline: central; font-weight: 700; }
 .layout-powered rect { filter: drop-shadow(0 0 0.18px #f3c84b); stroke: #f3c84b; stroke-width: 0.12; }
+.layout-future-slot rect { fill: none; fill-opacity: 0; stroke-width: 0.08; stroke-dasharray: 0.35 0.24; opacity: 0.5; }
+.layout-future-slot text { opacity: 0.38; }
 
 /* Environment building layout diagram (see renderEnvironmentDiagram in app.js): a simple SVG
    showing the solver's own chosen facility placements around one building instance, next to that

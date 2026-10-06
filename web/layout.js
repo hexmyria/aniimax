@@ -43,7 +43,7 @@ const CLUSTER_PACK_MOST = 12;
 // buildings then plots) at their final places and its cost, the indices of any piece there was
 // no room for, and how many spots were tried.
 export function layOut(pieces, options = {}) {
-    const { storage = { w: 2, h: 2 }, passes = 6, cells = null } = options;
+    const { storage = { w: 2, h: 2 }, passes = 6, cells = null, futureCells = cells } = options;
     const storageRect = { x: -storage.w / 2, y: -storage.h / 2, w: storage.w, h: storage.h };
     const storageRects = options.storages || [storageRect];
     const anchorOf = piece => {
@@ -53,6 +53,7 @@ export function layOut(pieces, options = {}) {
     let tried = 0;
     // Within the open cells: the parts of it inside each cell add up to all of it.
     const inside = r => !cells || cells.reduce((sum, c) => sum + overlapArea(r, c), 0) >= r.w * r.h - EPSILON;
+    const insideFuture = r => !futureCells || futureCells.reduce((sum, c) => sum + overlapArea(r, c), 0) >= r.w * r.h - EPSILON;
     const shapes = pieces.map(piece => (piece.cluster ? clusterOrientations(piece) : orientations(piece.members)));
     const membersOf = piece => (piece.cluster ? [...piece.buildings.map(b => ({ ...b, weight: 0 })), ...piece.plots] : piece.members);
     const weightOf = piece => membersOf(piece).reduce((sum, m) => sum + m.weight, 0);
@@ -105,8 +106,8 @@ export function layOut(pieces, options = {}) {
         squares.delete(key);
         sensitive.delete(key);
     };
-    const free = (r, ignore, extra = []) => {
-        if (!inside(r)) return false;
+    const free = (r, ignore, extra = [], future = false) => {
+        if (!(future ? insideFuture(r) : inside(r))) return false;
         for (const c of cellsOf(r)) {
             for (const other of grid.get(c) || []) {
                 if (other === ignore) continue;
@@ -135,7 +136,7 @@ export function layOut(pieces, options = {}) {
                 const y = snap(oy - shape.cy);
                 tried++;
                 const rects = shape.members.map(m => ({ x: m.x + x, y: m.y + y, w: m.w, h: m.h }));
-                if (!rects.every(r => free(r, i))) continue;
+                if (!rects.every((r, j) => free(r, i, [], !!shape.members[j].reserved))) continue;
                 const touchy = rects.filter((r, j) => shape.members[j].sensitive);
                 if (touchy.some(r => inOtherSquare(r, i))) continue;
                 if (firstFit === null) firstFit = distance;
@@ -265,7 +266,7 @@ export function layOut(pieces, options = {}) {
 // the middle of the open area and at the middles of the open plots nearest it, and keeping
 // whichever walks least with everything placed. Returns what `layOut` does, moved into the
 // homeland's own frame, plus `storageAt`, the Storage Unit's center.
-export function layOutHomeland(pieces, cells, storage = { w: 2, h: 2 }) {
+export function layOutHomeland(pieces, cells, storage = { w: 2, h: 2 }, futureCells = cells) {
     const area = cells.reduce((sum, c) => sum + c.w * c.h, 0);
     const mid = {
         x: cells.reduce((sum, c) => sum + (c.x + c.w / 2) * c.w * c.h, 0) / area,
@@ -283,7 +284,8 @@ export function layOutHomeland(pieces, cells, storage = { w: 2, h: 2 }) {
         const storageRect = { x: at.x - storage.w / 2, y: at.y - storage.h / 2, w: storage.w, h: storage.h };
         if (cells.reduce((sum, c) => sum + overlapArea(storageRect, c), 0) < storage.w * storage.h - EPSILON) continue;
         const relative = cells.map(c => ({ x: c.x - at.x, y: c.y - at.y, w: c.w, h: c.h }));
-        const out = layOut(pieces, { storage, cells: relative });
+        const relativeFuture = futureCells.map(c => ({ x: c.x - at.x, y: c.y - at.y, w: c.w, h: c.h }));
+        const out = layOut(pieces, { storage, cells: relative, futureCells: relativeFuture });
         tried += out.tried;
         const cost = out.pieces.reduce((sum, p) => sum + p.cost, 0);
         const better = !best || out.unplaced.length < best.out.unplaced.length
@@ -304,15 +306,45 @@ export function layOutHomeland(pieces, cells, storage = { w: 2, h: 2 }) {
 // Human-readable multi-storage layout. Facility groups are assigned to separate storage anchors;
 // every facility type stays with one anchor, so identical processors remain together rather than
 // being interleaved merely to shave a fraction off the hauling distance.
-export function layOutZonedHomeland(pieces, cells, storageCount, storage = { w: 2, h: 2 }) {
-    if (storageCount <= 1) return layOutHomeland(pieces, cells, storage);
+export function layOutZonedHomeland(pieces, cells, storageCount, storage = { w: 2, h: 2 }, futureCells = cells) {
+    if (storageCount <= 1) return layOutHomeland(pieces, cells, storage, futureCells);
     const fits = at => {
         const r = { x: at.x - storage.w / 2, y: at.y - storage.h / 2, w: storage.w, h: storage.h };
         return cells.reduce((sum, c) => sum + overlapArea(r, c), 0) >= r.w * r.h - EPSILON;
     };
     const candidates = cells.map(c => ({ x: c.x + c.w / 2, y: c.y + c.h / 2 })).filter(fits);
     const chosen = [];
-    if (candidates.length) {
+    if (candidates.length >= 4 && storageCount >= 4) {
+        const center = {
+            x: candidates.reduce((sum, c) => sum + c.x, 0) / candidates.length,
+            y: candidates.reduce((sum, c) => sum + c.y, 0) / candidates.length,
+        };
+        // Food and industry are one workshop district: their two Storage Units physically touch
+        // side by side. Prefer a horizontal pair at the centre of an open plot, which is easy to
+        // reproduce in game and leaves a shared strip for power utilities around both zones.
+        const pairs = cells.flatMap(cell => {
+            const cy = cell.y + cell.h / 2;
+            const cx = cell.x + cell.w / 2;
+            const a = { x: cx - storage.w / 2, y: cy };
+            const b = { x: cx + storage.w / 2, y: cy };
+            return fits(a) && fits(b) ? [{ a, b, centrality: Math.hypot(cx - center.x, cy - center.y) }] : [];
+        });
+        const pair = pairs.sort((a, b) => a.centrality - b.centrality)[0];
+        pair.a.paired = 'food';
+        pair.b.paired = 'industry';
+        chosen.push(pair.a, pair.b);
+        while (chosen.length < Math.min(storageCount, candidates.length)) {
+            const next = candidates
+                .filter(c => !chosen.includes(c) && !chosen.some(s => overlaps(
+                    { x: c.x - storage.w / 2, y: c.y - storage.h / 2, w: storage.w, h: storage.h },
+                    { x: s.x - storage.w / 2, y: s.y - storage.h / 2, w: storage.w, h: storage.h },
+                )))
+                .map(c => ({ c, distance: Math.min(...chosen.map(s => Math.hypot(c.x - s.x, c.y - s.y))) }))
+                .sort((a, b) => b.distance - a.distance || a.c.y - b.c.y || a.c.x - b.c.x)[0]?.c;
+            if (!next) break;
+            chosen.push(next);
+        }
+    } else if (candidates.length) {
         chosen.push([...candidates].sort((a, b) => a.y - b.y || a.x - b.x)[0]);
         while (chosen.length < Math.min(storageCount, candidates.length)) {
             const next = candidates
@@ -322,10 +354,10 @@ export function layOutZonedHomeland(pieces, cells, storageCount, storage = { w: 
             if (!next) break;
             chosen.push(next);
         }
+        chosen.sort((a, b) => a.y - b.y || a.x - b.x);
     }
-    chosen.sort((a, b) => a.y - b.y || a.x - b.x);
     const storages = chosen.map(at => ({ x: at.x - storage.w / 2, y: at.y - storage.h / 2, w: storage.w, h: storage.h }));
-    if (storages.length <= 1) return layOutHomeland(pieces, cells, storage);
+    if (storages.length <= 1) return layOutHomeland(pieces, cells, storage, futureCells);
 
     const areaOfPiece = p => (p.cluster ? [...p.buildings, ...p.plots] : p.members)
         .reduce((sum, m) => sum + m.w * m.h, 0);
@@ -342,18 +374,28 @@ export function layOutZonedHomeland(pieces, cells, storageCount, storage = { w: 
         pieces: pieces.filter(p => mergedGroup(p.layoutGroup || 'industry') === name),
     })).filter(g => g.pieces.length);
     if (groups.length === 0) return { ...layOut(pieces, { cells, storages }), storageAt: null };
-    const allocation = new Map(groups.map(g => [g.name, 1]));
-    for (let left = storages.length - groups.length; left > 0; left--) {
-        const g = [...groups].sort((a, b) => {
-            const scoreA = a.pieces.reduce((sum, p) => sum + areaOfPiece(p), 0) / (allocation.get(a.name) + 1);
-            const scoreB = b.pieces.reduce((sum, p) => sum + areaOfPiece(p), 0) / (allocation.get(b.name) + 1);
-            return scoreB - scoreA;
-        })[0];
-        allocation.set(g.name, allocation.get(g.name) + 1);
+    const indicesByGroup = new Map(groups.map(g => [g.name, []]));
+    const unused = new Set(storages.map((_, i) => i));
+    const take = (group, preferred = null) => {
+        if (!indicesByGroup.has(group) || unused.size === 0) return;
+        const index = preferred != null && unused.has(preferred) ? preferred : [...unused][0];
+        indicesByGroup.get(group).push(index);
+        unused.delete(index);
+    };
+    if (storages.length >= 4) {
+        take('food', chosen.findIndex(c => c.paired === 'food'));
+        take('industry', chosen.findIndex(c => c.paired === 'industry'));
     }
-    let nextStorage = 0;
+    groups.forEach(group => { if (indicesByGroup.get(group.name).length === 0) take(group.name); });
+    while (unused.size) {
+        const group = [...groups].sort((a, b) => {
+            const score = g => g.pieces.reduce((sum, p) => sum + areaOfPiece(p), 0) / (indicesByGroup.get(g.name).length + 1);
+            return score(b) - score(a);
+        })[0];
+        take(group.name);
+    }
     groups.forEach(group => {
-        const indices = Array.from({ length: allocation.get(group.name) }, () => nextStorage++);
+        const indices = indicesByGroup.get(group.name);
         const loads = new Map(indices.map(i => [i, 0]));
         // Pieces have already been bundled by facility in app.js. Keep each whole bundle at one
         // storage, balancing their physical area among any extra storages assigned to this zone.
@@ -367,7 +409,7 @@ export function layOutZonedHomeland(pieces, cells, storageCount, storage = { w: 
     // If there are more category groups than usable storage positions, merge overflow groups into
     // the last anchor rather than dropping them.
     pieces.forEach(piece => { if (!Number.isInteger(piece.storageIndex)) piece.storageIndex = storages.length - 1; });
-    const out = layOut(pieces, { cells, storages });
+    const out = layOut(pieces, { cells, futureCells, storages });
     return { ...out, storageAt: null };
 }
 
