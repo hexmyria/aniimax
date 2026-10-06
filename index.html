@@ -308,7 +308,7 @@
                             <p>The layout uses the maximum Storage Units your RV level allows. Farming, gathering/resident facilities, and the combined workshop district each receive one first; extra Storage Units follow the plan's hauling demand. Facilities of the same type stay together. Within each zone, busy facilities sit nearest its Storage Unit while environment coverage remains exactly as planned. Hover or tap a facility for its trips and distance. The diagram simulates batches against one shared inventory; carrying time is shown but does not delay production.</p>
                             <p>Food processing and crafting/industry form one workshop district. When a district receives two Storage Units, they keep separate catchment areas without being scattered across the homeland. Gathering and workshop facilities use stable Lv.20-sized islands: dashed outlines are future expansion slots, so later copies can be added without rearranging the existing machines. Farming remains flexible because its environment layouts change as plots are added.</p>
                             <p>From RV 12, choose E-mode in the facility table to add a Crackle Generator and the minimum connected Power Poles needed to reach those selected owned facilities, including idle ones. The summary compares their power demand with generator output. This is a placement preview only; it does not change the plan's production rates.</p>
-                            <p>Click or tap a facility to rotate its whole production district 90 degrees: the farming block, primary-industry block, or processing block. The district's facilities and Storage Units move together. Keyboard users can focus a facility and press Enter or Space. A turn that would overlap another district or leave the open plots is rejected.</p>
+                            <p>Click or tap a facility to rotate its whole production district 90 degrees: the farming block, primary-industry block, or processing block. The district's facilities and Storage Units move together and slide to the nearest valid position if needed. Keyboard users can focus a facility and press Enter or Space. A turn is rejected only when no valid position fits.</p>
                         </details>
                         <div class="layout-controls">
                             <span class="layout-toggles">
@@ -566,7 +566,7 @@
             }
         });
     </script>
-    <script type="module" src="i18n.js?v=ja20"></script>
-    <script type="module" src="app.js?v=rotate-districts1"></script>
+    <script type="module" src="i18n.js?v=ja21"></script>
+    <script type="module" src="app.js?v=rotate-districts2"></script>
 </body>
 </html>

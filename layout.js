@@ -315,12 +315,24 @@ export function layOutZonedHomeland(pieces, cells, storageCount, storage = { w: 
     const candidates = cells.map(c => ({ x: c.x + c.w / 2, y: c.y + c.h / 2 })).filter(fits);
     const chosen = [];
     if (candidates.length) {
-        chosen.push([...candidates].sort((a, b) => a.y - b.y || a.x - b.x)[0]);
+        const area = cells.reduce((sum, cell) => sum + cell.w * cell.h, 0);
+        const center = {
+            x: cells.reduce((sum, cell) => sum + (cell.x + cell.w / 2) * cell.w * cell.h, 0) / area,
+            y: cells.reduce((sum, cell) => sum + (cell.y + cell.h / 2) * cell.w * cell.h, 0) / area,
+        };
+        // Start near the homeland's centre, then take the nearest non-overlapping anchors. The
+        // old farthest-first choice made three readable districts occupy opposite map corners.
+        chosen.push([...candidates].sort((a, b) => Math.hypot(a.x - center.x, a.y - center.y) - Math.hypot(b.x - center.x, b.y - center.y) || a.y - b.y || a.x - b.x)[0]);
         while (chosen.length < Math.min(storageCount, candidates.length)) {
             const next = candidates
-                .filter(c => !chosen.includes(c))
+                .filter(c => !chosen.includes(c) && !chosen.some(s => overlaps(
+                    { x: c.x - storage.w / 2, y: c.y - storage.h / 2, w: storage.w, h: storage.h },
+                    { x: s.x - storage.w / 2, y: s.y - storage.h / 2, w: storage.w, h: storage.h },
+                )))
                 .map(c => ({ c, distance: Math.min(...chosen.map(s => Math.hypot(c.x - s.x, c.y - s.y))) }))
-                .sort((a, b) => b.distance - a.distance || a.c.y - b.c.y || a.c.x - b.c.x)[0]?.c;
+                .sort((a, b) => a.distance - b.distance
+                    || Math.hypot(a.c.x - center.x, a.c.y - center.y) - Math.hypot(b.c.x - center.x, b.c.y - center.y)
+                    || a.c.y - b.c.y || a.c.x - b.c.x)[0]?.c;
             if (!next) break;
             chosen.push(next);
         }
@@ -414,12 +426,12 @@ export function layOutZonedHomeland(pieces, cells, storageCount, storage = { w: 
     // the last anchor rather than dropping them.
     pieces.forEach(piece => { if (!Number.isInteger(piece.storageIndex)) piece.storageIndex = storages.length - 1; });
     const out = layOut(pieces, { cells, futureCells, storages });
-    return { ...rotateLayoutDistricts(out, cells, districtRotations), storageAt: null };
+    return { ...rotateLayoutDistricts(out, cells, districtRotations, futureCells), storageAt: null };
 }
 
 // Rotates complete production districts around their own bounding-box centre after the automatic
 // layout. The district's facilities and Storage Units move together; an unsafe turn is rejected.
-export function rotateLayoutDistricts(layout, cells, rotations = {}) {
+export function rotateLayoutDistricts(layout, cells, rotations = {}, futureCells = cells) {
     const result = {
         ...layout,
         storages: layout.storages.map(storage => ({ ...storage })),
@@ -427,7 +439,8 @@ export function rotateLayoutDistricts(layout, cells, rotations = {}) {
         rejectedRotations: [],
     };
     const districtOf = name => name === 'food' || name === 'industry' ? 'work' : name;
-    const inside = rect => cells.reduce((sum, cell) => sum + overlapArea(rect, cell), 0) >= rect.w * rect.h - EPSILON;
+    const inside = rect => (rect.reserved ? futureCells : cells)
+        .reduce((sum, cell) => sum + overlapArea(rect, cell), 0) >= rect.w * rect.h - EPSILON;
     const turnRect = (rect, turns, center) => {
         let out = { ...rect };
         for (let i = 0; i < turns; i++) {
@@ -462,19 +475,41 @@ export function rotateLayoutDistricts(layout, cells, rotations = {}) {
         const other = result.pieces.filter((_, i) => !pieceIndices.includes(i)).flatMap(piece => piece.members)
             .concat(result.storages.filter((_, i) => !storageIndices.includes(i)));
         const selfOverlaps = selected.some((rect, i) => selected.slice(i + 1).some(otherRect => overlaps(rect, otherRect)));
-        const blocked = selected.some(rect => !inside(rect) || other.some(otherRect => overlaps(rect, otherRect)));
-        const selectedBuildings = selected.filter(rect => rect.building);
         const otherBuildings = other.filter(rect => rect.building);
         const coverage = rect => ({ x: rect.x + rect.w / 2 - RADIUS, y: rect.y + rect.h / 2 - RADIUS, w: RADIUS * 2, h: RADIUS * 2 });
-        const coverageConflict = selectedBuildings.some(building => otherBuildings.some(otherBuilding => overlaps(coverage(building), coverage(otherBuilding))))
-            || selected.filter(rect => rect.sensitive).some(rect => otherBuildings.some(building => overlaps(rect, coverage(building))))
-            || other.filter(rect => rect.sensitive).some(rect => selectedBuildings.some(building => overlaps(rect, coverage(building))));
-        if (selfOverlaps || blocked || coverageConflict) {
+        const cellExtent = {
+            x: Math.min(...futureCells.map(cell => cell.x)), y: Math.min(...futureCells.map(cell => cell.y)),
+            x2: Math.max(...futureCells.map(cell => cell.x + cell.w)), y2: Math.max(...futureCells.map(cell => cell.y + cell.h)),
+        };
+        const turnedBounds = {
+            x: Math.min(...selected.map(r => r.x)), y: Math.min(...selected.map(r => r.y)),
+            x2: Math.max(...selected.map(r => r.x + r.w)), y2: Math.max(...selected.map(r => r.y + r.h)),
+        };
+        // If rotation in place is blocked, slide the whole district by the shortest possible
+        // quarter-tile offset. Its internal arrangement and warehouses remain rigid.
+        const offsets = latticeByDistance({
+            x: cellExtent.x - turnedBounds.x,
+            y: cellExtent.y - turnedBounds.y,
+            x2: cellExtent.x2 - turnedBounds.x2,
+            y2: cellExtent.y2 - turnedBounds.y2,
+        }, STEP);
+        const shifted = (rect, dx, dy) => ({ ...rect, x: snap(rect.x + dx), y: snap(rect.y + dy) });
+        const validAt = (dx, dy) => {
+            const candidate = selected.map(rect => shifted(rect, dx, dy));
+            const buildings = candidate.filter(rect => rect.building);
+            return candidate.every(rect => inside(rect) && !other.some(otherRect => overlaps(rect, otherRect)))
+                && !buildings.some(building => otherBuildings.some(otherBuilding => overlaps(coverage(building), coverage(otherBuilding))))
+                && !candidate.filter(rect => rect.sensitive).some(rect => otherBuildings.some(building => overlaps(rect, coverage(building))))
+                && !other.filter(rect => rect.sensitive).some(rect => buildings.some(building => overlaps(rect, coverage(building))));
+        };
+        const offset = !selfOverlaps && offsets.find(([dx, dy]) => validAt(dx, dy));
+        if (!offset) {
             result.rejectedRotations.push(district);
             continue;
         }
-        turnedPieces.forEach((members, i) => { result.pieces[i].members = members; });
-        turnedStorages.forEach((storageRect, i) => { Object.assign(result.storages[i], storageRect); });
+        const [dx, dy] = offset;
+        turnedPieces.forEach((members, i) => { result.pieces[i].members = members.map(member => shifted(member, dx, dy)); });
+        turnedStorages.forEach((storageRect, i) => { Object.assign(result.storages[i], shifted(storageRect, dx, dy)); });
     }
     result.storage = result.storages[0] || result.storage;
     return result;
