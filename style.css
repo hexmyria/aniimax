@@ -781,6 +781,28 @@ tbody tr:first-child td {
     font-weight: normal;
 }
 
+.power-choice {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+}
+
+.power-field {
+    fill: #f3c84b;
+    fill-opacity: 0.07;
+    stroke: #f3c84b;
+    stroke-opacity: 0.55;
+    stroke-width: 0.08;
+    stroke-dasharray: 0.35 0.22;
+}
+
+.power-field.generator { fill-opacity: 0.11; }
+.power-line { stroke: #f3c84b; stroke-width: 0.12; stroke-dasharray: 0.28 0.18; }
+.layout-power-utility rect { fill: #302a19; stroke: #f3c84b; stroke-width: 0.1; }
+.layout-power-utility text { fill: #ffe998; text-anchor: middle; dominant-baseline: central; font-weight: 700; }
+.layout-powered rect { filter: drop-shadow(0 0 0.18px #f3c84b); stroke: #f3c84b; stroke-width: 0.12; }
+
 /* Environment building layout diagram (see renderEnvironmentDiagram in app.js): a simple SVG
    showing the solver's own chosen facility placements around one building instance, next to that
    instance's table. */
