@@ -7,6 +7,7 @@ import {
     facilityDisplayRank,
 } from './facility-config.js?v=season1';
 import { createShareUrl, readShareHash, urlWithoutShare } from './share-config.js';
+import { sharedFacilityUtilization, theoreticalUtilization } from './utilization.js?v=1';
 
 let wasmReady = false;
 
@@ -3023,8 +3024,11 @@ function facilityPlanTable(rows, showMinimumLevel = false) {
 // One table over several labelled groups, e.g. a paired environment's three zones: each group's
 // rows follow a band naming it, so the column headers are written once.
 function facilityPlanTableOf(groups, showMinimumLevel = false) {
+    const allRows = groups.flatMap(group => group.rows);
+    const sharedUtilization = new Map([...new Set(allRows.map(step => step.facility))]
+        .map(facility => [facility, sharedFacilityUtilization(allRows, facility)]));
     const body = groups
-        .map(group => (group.label ? `<tr class="facility-plan-group"><td colspan="${showMinimumLevel ? 6 : 5}">${group.label}</td></tr>` : '') + planRows(group.rows, showMinimumLevel))
+        .map(group => (group.label ? `<tr class="facility-plan-group"><td colspan="${showMinimumLevel ? 7 : 6}">${group.label}</td></tr>` : '') + planRows(group.rows, showMinimumLevel, sharedUtilization))
         .join('');
     return `
         <div class="table-wrapper">
@@ -3036,6 +3040,7 @@ function facilityPlanTableOf(groups, showMinimumLevel = false) {
                         <th>Producing</th>
                         ${showMinimumLevel ? '<th>Minimum facility level</th>' : ''}
                         <th>Aniimo</th>
+                        <th>Theoretical utilization</th>
                         <th>Why</th>
                     </tr>
                 </thead>
@@ -3045,17 +3050,25 @@ function facilityPlanTableOf(groups, showMinimumLevel = false) {
     `;
 }
 
-function planRows(rows, showMinimumLevel = false) {
-    return rows.map(step => `
+function planRows(rows, showMinimumLevel = false, sharedUtilization = new Map()) {
+    return rows.map(step => {
+        const utilization = theoreticalUtilization(step);
+        const total = sharedUtilization.get(step.facility);
+        const utilizationText = utilization == null
+            ? '—'
+            : `${formatPercent(utilization)}${total == null ? '' : `<span class="utilization-total">facility total ${formatPercent(total)}</span>`}`;
+        return `
                     <tr class="status-${step.status}">
                         <td data-label="Facility">${step.facility}</td>
                         <td data-label="Count">${step.facility_count}</td>
                         <td data-label="Producing">${step.item_name ? prettyItem(step.item_name) : '-'}${unverifiedRowKeys.has(`${step.facility}|${step.item_name}`) ? '<span class="tag unverified" title="Not yet checked in game">unverified</span>' : ''}${step.item_name && step.status === 'producing' ? `<button type="button" class="skip-row" data-skip="${step.item_name}" title="Can't make this? Skip it and plan again" aria-label="Skip ${prettyItem(step.item_name)} and plan again">✕</button>` : ''}</td>
                         ${showMinimumLevel ? `<td data-label="Minimum facility level">${step.item_name ? `Lv.${recipeIndex.find(recipe => recipe.name === step.item_name && recipe.facility === step.facility)?.facilityLevel ?? '?'}+` : '-'}</td>` : ''}
                         <td data-label="Aniimo">${aniimoLabel(step)}</td>
+                        <td data-label="Theoretical utilization" class="utilization-cell">${utilizationText}</td>
                         <td data-label="Why">${prettyReason(step.reason)}</td>
                     </tr>
-                `).join('');
+                `;
+    }).join('');
 }
 
 // "Sowing", "Sowing and Collecting", "Reaping, Logging and Collecting".

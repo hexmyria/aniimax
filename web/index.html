@@ -290,6 +290,7 @@
                             <summary>How to read this</summary>
                             <p>Each row is one product; a facility split between several products gets a row for each. Crops that need a growing environment are grouped by the Heat Furnace, Cooling Unit or Sunlamp setting that covers them, with its layout. Everything else is grouped like the facility list.</p>
                             <p>In the Aniimo column, each circle is an ability in its game color with the Aniimo level inside; a ring means the plan counts on the facility's personality bonus. Hover a circle for details.</p>
+                            <p>Theoretical utilization is the share of a facility's available processing time used by this steady-state plan. 100% means it is continuously busy; a lower value includes the average time waiting for materials. For a Woodworking Bench or Chimney Kiln alternating recipes, “facility total” is their combined utilization.</p>
                         </details>
                         <!-- Populated by app.js's renderFacilityPlan(): one section per
                              environment mode in use (Cool/Warm/Freeze/Scorching/Adequate) first,
@@ -556,7 +557,7 @@
             }
         });
     </script>
-    <script type="module" src="i18n.js?v=ja12"></script>
-    <script type="module" src="app.js?v=food1"></script>
+    <script type="module" src="i18n.js?v=ja13"></script>
+    <script type="module" src="app.js?v=utilization1"></script>
 </body>
 </html>
