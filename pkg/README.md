@@ -21,6 +21,7 @@ Updated for the full release, with a joint LP-based facility-allocation engine f
 - **Whole-Unit Realism**: Growers are rounded to whole plots and processors are dedicated to one recipe each, matching how the game actually works; only the Woodworking Bench and Chimney Kiln take turns between tiers, since each tier is made from the one below
 - **Level-Up Strategy**: Plans the soonest next RV level-up (Home Coins plus Wood Blocks and Mineral Sand, or from RV 7 the Woodworking Bench and Chimney Kiln items it costs), counting what you already have, then earns as many Home Coins as that pace allows; RV 2 to 20
 - **Priorities Strategy**: Rank what you want (Home Coins, Aniimo EXP, Aniipods, Wood Blocks, Mineral Sand, and Harvest Moon Points during the festival) and switch off what you don't; each one is maximized in turn, keeping what the ones above it reached, and Home Coins take whatever is left
+- **Food Self-Sufficiency**: Reserve enough food for a chosen number of Homeland Aniimo at 10 Energy per minute each, selecting the lowest-opportunity-cost mix before optimizing the chosen priorities
 - **Harvest Moon Festival**: From RV 10, plans can use the season's crops and recipes (Recipe Note ones once you tick them), count Harvest Moon Points on everything sold, and show the Moonray Wheat their seeds use; wheat is taken as unlimited
 - **Growing Environments**: Heat Furnace, Cooling Unit and Sunlamp layouts are planned with the plots, including a crop grown outside its environment at the slower rate, and a Heat Furnace and Cooling Unit placed so their areas overlap and add up to a third temperature between them
 - **Watering**: A plot is watered twice as it grows, each watering taking an eighth off its full-speed time
@@ -628,6 +629,7 @@ Production data is stored in CSV files in the `data/` directory:
 - `joy_wheel_loom.csv` - Thread, yarn and fabric
 - `woodworking_bench.csv`, `chimney_kiln.csv` - RV level-up materials from Wood Blocks and Mineral Sand (no sale value)
 - `harvest_moon_festival.csv` - The Harvest Moon Festival's crops and recipes, with their seed cost in Moonray Wheat and Harvest Moon Points
+- `food_energy.csv` - Current food Energy values used by the web app's self-sufficiency constraint
 
 Farmland, Woodland, Mine, Well, Tidewhisper Sandcastle, Dewy House, Carousel Mill, Crafting Table, Claw Game Cooker, Jukebox Dryer, Simmering Pot, Phonolfactory Table, Bouncy Brew Keg, Joy Wheel Loom, Blazing Stove, Pickling Jar, Woodworking Bench and Chimney Kiln are verified in game. The other three facilities' recipes haven't been checked in game yet: `data/unverified.csv` lists them, the recipe list marks each one, and a plan lists any it relies on.
 

@@ -770,6 +770,17 @@ tbody tr:first-child td {
     color: var(--text-muted);
 }
 
+.utilization-cell {
+    white-space: nowrap;
+}
+
+.utilization-total {
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: normal;
+}
+
 /* Environment building layout diagram (see renderEnvironmentDiagram in app.js): a simple SVG
    showing the solver's own chosen facility placements around one building instance, next to that
    instance's table. */
