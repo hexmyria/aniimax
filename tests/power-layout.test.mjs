@@ -1,8 +1,21 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { POWER_GRID } from '../web/facility-config.js';
 import { routePowerGrid } from '../web/power-layout.js';
 
 const cells = [{ x: 0, y: 0, w: 40, h: 15 }];
+
+test('the Crackle Generator occupies its full 2 by 2 footprint', () => {
+    const target = { x: 8, y: 5, w: 2, h: 2 };
+    const grid = routePowerGrid({
+        targets: [target], occupied: [target], cells,
+        generatorFootprint: POWER_GRID.generatorFootprint,
+        generatorCoverage: POWER_GRID.generatorCoverage,
+    });
+    assert.ok(grid.generator);
+    assert.equal(grid.generator.w, 2);
+    assert.equal(grid.generator.h, 2);
+});
 
 test('a nearby selected facility uses generator coverage without a pole', () => {
     const target = { x: 8, y: 5, w: 2, h: 2 };
