@@ -1527,7 +1527,7 @@ let layoutShowsWhole = false;
 let lastLayout = null;
 
 const STORAGE_GROUP_LABELS = {
-    farm: 'Farming', primary: 'Gathering', food: 'Food processing', industry: 'Crafting and industry', work: 'Processing',
+    farm: 'Farming', primary: 'Gathering', food: 'Food processing', industry: 'Crafting and industry', work: 'Food processing + crafting/industry',
 };
 
 function storageForMember(layout, member) {

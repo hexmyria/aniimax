@@ -314,38 +314,7 @@ export function layOutZonedHomeland(pieces, cells, storageCount, storage = { w: 
     };
     const candidates = cells.map(c => ({ x: c.x + c.w / 2, y: c.y + c.h / 2 })).filter(fits);
     const chosen = [];
-    if (candidates.length >= 4 && storageCount >= 4) {
-        const center = {
-            x: candidates.reduce((sum, c) => sum + c.x, 0) / candidates.length,
-            y: candidates.reduce((sum, c) => sum + c.y, 0) / candidates.length,
-        };
-        // Food and industry are one workshop district, but their Storage Units have separate
-        // catchment areas. Ten tiles between their centres is far enough to shorten trips on both
-        // sides without splitting the two related processing zones across the homeland.
-        const workshopStorageGap = 10;
-        const pairs = cells.flatMap(cell => {
-            const cy = cell.y + cell.h / 2;
-            const cx = cell.x + cell.w / 2;
-            const a = { x: cx - workshopStorageGap / 2, y: cy };
-            const b = { x: cx + workshopStorageGap / 2, y: cy };
-            return fits(a) && fits(b) ? [{ a, b, centrality: Math.hypot(cx - center.x, cy - center.y) }] : [];
-        });
-        const pair = pairs.sort((a, b) => a.centrality - b.centrality)[0];
-        pair.a.paired = 'food';
-        pair.b.paired = 'industry';
-        chosen.push(pair.a, pair.b);
-        while (chosen.length < Math.min(storageCount, candidates.length)) {
-            const next = candidates
-                .filter(c => !chosen.includes(c) && !chosen.some(s => overlaps(
-                    { x: c.x - storage.w / 2, y: c.y - storage.h / 2, w: storage.w, h: storage.h },
-                    { x: s.x - storage.w / 2, y: s.y - storage.h / 2, w: storage.w, h: storage.h },
-                )))
-                .map(c => ({ c, distance: Math.min(...chosen.map(s => Math.hypot(c.x - s.x, c.y - s.y))) }))
-                .sort((a, b) => b.distance - a.distance || a.c.y - b.c.y || a.c.x - b.c.x)[0]?.c;
-            if (!next) break;
-            chosen.push(next);
-        }
-    } else if (candidates.length) {
+    if (candidates.length) {
         chosen.push([...candidates].sort((a, b) => a.y - b.y || a.x - b.x)[0]);
         while (chosen.length < Math.min(storageCount, candidates.length)) {
             const next = candidates
@@ -365,11 +334,13 @@ export function layOutZonedHomeland(pieces, cells, storageCount, storage = { w: 
     const mergedGroup = name => {
         if (storages.length === 2) return name === 'farm' ? 'farm' : 'work';
         if (storages.length === 3) return name === 'farm' ? 'farm' : name === 'primary' ? 'primary' : 'work';
-        return name;
+        // Food processing and crafting/industry form one workshop district. Keeping them under
+        // one catchment leaves the fourth Storage Unit free to follow the plan's actual hauling
+        // demand instead of forcing one warehouse per label.
+        return name === 'food' || name === 'industry' ? 'work' : name;
     };
     const groupOrder = storages.length === 2 ? ['farm', 'work']
-        : storages.length === 3 ? ['farm', 'primary', 'work']
-            : ['farm', 'primary', 'food', 'industry'];
+        : ['farm', 'primary', 'work'];
     const groups = groupOrder.map(name => ({
         name,
         pieces: pieces.filter(p => mergedGroup(p.layoutGroup || 'industry') === name),
@@ -383,27 +354,34 @@ export function layOutZonedHomeland(pieces, cells, storageCount, storage = { w: 
         indicesByGroup.get(group).push(index);
         unused.delete(index);
     };
-    if (storages.length >= 4) {
-        take('food', chosen.findIndex(c => c.paired === 'food'));
-        take('industry', chosen.findIndex(c => c.paired === 'industry'));
-    }
     groups.forEach(group => { if (indicesByGroup.get(group.name).length === 0) take(group.name); });
     while (unused.size) {
         const group = [...groups].sort((a, b) => {
-            const score = g => g.pieces.reduce((sum, p) => sum + areaOfPiece(p), 0) / (indicesByGroup.get(g.name).length + 1);
-            return score(b) - score(a);
+            const demand = g => g.pieces.reduce((sum, p) => sum + (p.cluster ? [...p.buildings, ...p.plots] : p.members)
+                .reduce((pieceSum, member) => pieceSum + (member.weight || 0), 0), 0);
+            // Approximate each added warehouse's value by the hauling demand it would share.
+            // Area is only a stable tie-break for idle/future-only zones.
+            const score = g => g.pieces.length > indicesByGroup.get(g.name).length
+                ? demand(g) / (indicesByGroup.get(g.name).length + 1)
+                : 0;
+            const byDemand = score(b) - score(a);
+            if (Math.abs(byDemand) > EPSILON) return byDemand;
+            const area = g => g.pieces.reduce((sum, p) => sum + areaOfPiece(p), 0) / (indicesByGroup.get(g.name).length + 1);
+            return area(b) - area(a);
         })[0];
         take(group.name);
     }
     groups.forEach(group => {
         const indices = indicesByGroup.get(group.name);
         const loads = new Map(indices.map(i => [i, 0]));
-        // Pieces have already been bundled by facility in app.js. Keep each whole bundle at one
-        // storage, balancing their physical area among any extra storages assigned to this zone.
-        [...group.pieces].sort((a, b) => areaOfPiece(b) - areaOfPiece(a)).forEach(piece => {
+        const demandOfPiece = piece => (piece.cluster ? [...piece.buildings, ...piece.plots] : piece.members)
+            .reduce((sum, member) => sum + (member.weight || 0), 0);
+        // Keep each facility bundle together, but balance hauling demand—not footprint—between
+        // the warehouses assigned to this district.
+        [...group.pieces].sort((a, b) => demandOfPiece(b) - demandOfPiece(a) || areaOfPiece(b) - areaOfPiece(a)).forEach(piece => {
             const index = [...indices].sort((a, b) => loads.get(a) - loads.get(b))[0];
             piece.storageIndex = index;
-            loads.set(index, loads.get(index) + areaOfPiece(piece));
+            loads.set(index, loads.get(index) + demandOfPiece(piece));
         });
         indices.forEach(i => { storages[i].label = group.name; });
     });
