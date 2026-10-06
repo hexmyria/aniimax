@@ -1,6 +1,6 @@
-// Places a whole homeland around a single Storage Unit, so the Aniimo hauling each finished batch
-// walk as little as they can: a piece's cost is its trips (finished batches) per hour times its
-// straight-line distance to the Storage Unit, center to center, and the layout keeps the total low.
+// Places a whole homeland around the Storage Units available at its RV level. Each production
+// group has an assigned unit, and within that zone a piece's cost is its trips (finished batches)
+// per hour times its straight-line distance to that Storage Unit, center to center.
 //
 // Environment buildings keep every plot the plan gives them covered as planned, but not in any set
 // arrangement: a plot may go anywhere its footprint overlaps its building's 9x9 coverage square by
@@ -45,6 +45,11 @@ const CLUSTER_PACK_MOST = 12;
 export function layOut(pieces, options = {}) {
     const { storage = { w: 2, h: 2 }, passes = 6, cells = null } = options;
     const storageRect = { x: -storage.w / 2, y: -storage.h / 2, w: storage.w, h: storage.h };
+    const storageRects = options.storages || [storageRect];
+    const anchorOf = piece => {
+        const s = storageRects[Math.min(piece.storageIndex || 0, storageRects.length - 1)];
+        return { x: s.x + s.w / 2, y: s.y + s.h / 2 };
+    };
     let tried = 0;
     // Within the open cells: the parts of it inside each cell add up to all of it.
     const inside = r => !cells || cells.reduce((sum, c) => sum + overlapArea(r, c), 0) >= r.w * r.h - EPSILON;
@@ -58,7 +63,8 @@ export function layOut(pieces, options = {}) {
         .map(p => p.i);
 
     // Spots to try: the open cells' extent, or with none given, well past what everything needs.
-    const totalArea = pieces.reduce((sum, p) => sum + areaOf(p), 0) + storage.w * storage.h;
+    const totalArea = pieces.reduce((sum, p) => sum + areaOf(p), 0)
+        + storageRects.reduce((sum, s) => sum + s.w * s.h, 0);
     const reach = Math.ceil(Math.sqrt(totalArea) * 1.6 + 16);
     const extent = cells
         ? {
@@ -66,9 +72,17 @@ export function layOut(pieces, options = {}) {
             x2: Math.max(...cells.map(c => c.x + c.w)), y2: Math.max(...cells.map(c => c.y + c.h)),
         }
         : { x: -reach, y: -reach, x2: reach, y2: reach };
-    const offsets = latticeByDistance(extent, STEP);
+    const offsetsByStorage = storageRects.map(s => {
+        const anchor = { x: s.x + s.w / 2, y: s.y + s.h / 2 };
+        return latticeByDistance({ x: extent.x - anchor.x, y: extent.y - anchor.y, x2: extent.x2 - anchor.x, y2: extent.y2 - anchor.y }, STEP)
+            .map(([x, y, distance]) => [x + anchor.x, y + anchor.y, distance]);
+    });
     // Environment buildings stand on whole tiles, which is plenty for them and far fewer to try.
-    const clusterOffsets = latticeByDistance(extent, 1);
+    const clusterOffsetsByStorage = storageRects.map(s => {
+        const anchor = { x: s.x + s.w / 2, y: s.y + s.h / 2 };
+        return latticeByDistance({ x: extent.x - anchor.x, y: extent.y - anchor.y, x2: extent.x2 - anchor.x, y2: extent.y2 - anchor.y }, 1)
+            .map(([x, y, distance]) => [x + anchor.x, y + anchor.y, distance]);
+    });
 
     // What's down: rectangles by piece, found through a coarse grid; coverage squares by cluster;
     // and the rectangles that must stay out of every square.
@@ -107,10 +121,12 @@ export function layOut(pieces, options = {}) {
         }
         return false;
     };
-    occupy('storage', { rects: [storageRect] });
+    storageRects.forEach((s, i) => occupy(`storage-${i}`, { rects: [s] }));
 
     const placeRigid = i => {
         let best = null;
+        const anchor = anchorOf(pieces[i]);
+        const offsets = offsetsByStorage[pieces[i].storageIndex || 0];
         for (const shape of shapes[i]) {
             let firstFit = null;
             for (const [ox, oy, distance] of offsets) {
@@ -123,9 +139,9 @@ export function layOut(pieces, options = {}) {
                 const touchy = rects.filter((r, j) => shape.members[j].sensitive);
                 if (touchy.some(r => inOtherSquare(r, i))) continue;
                 if (firstFit === null) firstFit = distance;
-                const cost = shape.members.reduce((sum, m) => sum + m.weight * centerDistance(m, x, y), 0)
+                const cost = shape.members.reduce((sum, m) => sum + m.weight * centerDistance(m, x, y, anchor), 0)
                     // Pieces nobody visits still go as close as they can, to keep the homeland tight.
-                    + EPSILON * Math.hypot(shape.cx + x, shape.cy + y);
+                    + EPSILON * Math.hypot(shape.cx + x - anchor.x, shape.cy + y - anchor.y);
                 if (!best || cost < best.cost - EPSILON) best = { cost, x, y, shape, rects, sensitive: touchy };
             }
         }
@@ -136,6 +152,7 @@ export function layOut(pieces, options = {}) {
     // arrangement (turned with it), the busiest crops on the plots nearest the Storage Unit; with
     // `pack`, also packed afresh nearest the Storage Unit within their zones, if that's cheaper.
     const tryCluster = (i, shape, x, y, pack, clear) => {
+        const anchor = anchorOf(pieces[i]);
         tried++;
         const buildings = shape.buildings.map(b => ({ x: b.x + x, y: b.y + y, w: b.w, h: b.h }));
         const own = buildings.map(b => ({ x: b.x + b.w / 2 - RADIUS, y: b.y + b.h / 2 - RADIUS, w: 2 * RADIUS, h: 2 * RADIUS }));
@@ -145,17 +162,17 @@ export function layOut(pieces, options = {}) {
             const outside = shape.pair ? [[1], [], [0]][zone] : [];
             return inside.every(k => overlaps(r, own[k])) && outside.every(k => !overlaps(r, own[k])) && !inOtherSquare(r, i);
         };
-        const costOf = rects => shape.plots.reduce((sum, p, j) => sum + p.weight * Math.hypot(rects[j].x + p.w / 2, rects[j].y + p.h / 2), 0);
+        const costOf = rects => shape.plots.reduce((sum, p, j) => sum + p.weight * Math.hypot(rects[j].x + p.w / 2 - anchor.x, rects[j].y + p.h / 2 - anchor.y), 0);
         let plots = null;
         const slots = shape.plots.map((p, j) => ({ x: shape.planned[j].x + x, y: shape.planned[j].y + y, w: p.w, h: p.h }));
         if (slots.every(r => free(r, i) && !buildings.some(b => overlaps(r, b)))) {
-            plots = assignSlots(shape.plots, slots);
+            plots = assignSlots(shape.plots, slots, anchor);
             if (!plots.every((r, j) => allowed(r, shape.plots[j].zone))) plots = null;
         }
         // Packing afresh is only tried where the plan's arrangement fits: in crowded ground it
         // mostly fails, and failing is the slow part.
         if (pack && plots) {
-            const packed = packPlots(shape.plots, own, allowed, r => free(r, i), buildings);
+            const packed = packPlots(shape.plots, own, allowed, r => free(r, i), buildings, anchor);
             if (packed && costOf(packed) < costOf(plots) - EPSILON) plots = packed;
         }
         if (!plots) return null;
@@ -164,6 +181,7 @@ export function layOut(pieces, options = {}) {
 
     const placeCluster = i => {
         let best = null;
+        const clusterOffsets = clusterOffsetsByStorage[pieces[i].storageIndex || 0];
         // Whether buildings standing here are clear, with their squares clear of every other
         // building's square and every crop that must stay uncovered. A lone building stands in
         // the same place in every orientation, so each place is worked out once.
@@ -197,7 +215,7 @@ export function layOut(pieces, options = {}) {
     // Nothing moves out while pieces are first put down, so once a piece of some shape finds no
     // room, no later one of that shape will: they're skipped rather than searched for again.
     const noRoom = new Set();
-    const shapeOf = i => (pieces[i].cluster ? null : JSON.stringify(pieces[i].members.map(m => [m.x, m.y, m.w, m.h, !!m.sensitive])));
+    const shapeOf = i => (pieces[i].cluster ? null : `${pieces[i].storageIndex || 0}|${JSON.stringify(pieces[i].members.map(m => [m.x, m.y, m.w, m.h, !!m.sensitive]))}`);
     for (const i of order) {
         const shape = shapeOf(i);
         const spot = shape !== null && noRoom.has(shape) ? null : place(i);
@@ -227,6 +245,7 @@ export function layOut(pieces, options = {}) {
 
     return {
         storage: storageRect,
+        storages: storageRects,
         unplaced,
         tried,
         pieces: pieces.map((piece, i) => {
@@ -235,7 +254,7 @@ export function layOut(pieces, options = {}) {
             const source = piece.cluster ? [...piece.buildings, ...piece.plots] : piece.members;
             return {
                 ...piece,
-                members: spot.rects.map((r, j) => ({ ...source[j], x: r.x, y: r.y, w: r.w, h: r.h })),
+                members: spot.rects.map((r, j) => ({ ...source[j], x: r.x, y: r.y, w: r.w, h: r.h, storageIndex: piece.storageIndex || 0 })),
                 cost: spot.cost,
             };
         }),
@@ -282,10 +301,80 @@ export function layOutHomeland(pieces, cells, storage = { w: 2, h: 2 }) {
     };
 }
 
+// Human-readable multi-storage layout. Facility groups are assigned to separate storage anchors;
+// every facility type stays with one anchor, so identical processors remain together rather than
+// being interleaved merely to shave a fraction off the hauling distance.
+export function layOutZonedHomeland(pieces, cells, storageCount, storage = { w: 2, h: 2 }) {
+    if (storageCount <= 1) return layOutHomeland(pieces, cells, storage);
+    const fits = at => {
+        const r = { x: at.x - storage.w / 2, y: at.y - storage.h / 2, w: storage.w, h: storage.h };
+        return cells.reduce((sum, c) => sum + overlapArea(r, c), 0) >= r.w * r.h - EPSILON;
+    };
+    const candidates = cells.map(c => ({ x: c.x + c.w / 2, y: c.y + c.h / 2 })).filter(fits);
+    const chosen = [];
+    if (candidates.length) {
+        chosen.push([...candidates].sort((a, b) => a.y - b.y || a.x - b.x)[0]);
+        while (chosen.length < Math.min(storageCount, candidates.length)) {
+            const next = candidates
+                .filter(c => !chosen.includes(c))
+                .map(c => ({ c, distance: Math.min(...chosen.map(s => Math.hypot(c.x - s.x, c.y - s.y))) }))
+                .sort((a, b) => b.distance - a.distance || a.c.y - b.c.y || a.c.x - b.c.x)[0]?.c;
+            if (!next) break;
+            chosen.push(next);
+        }
+    }
+    chosen.sort((a, b) => a.y - b.y || a.x - b.x);
+    const storages = chosen.map(at => ({ x: at.x - storage.w / 2, y: at.y - storage.h / 2, w: storage.w, h: storage.h }));
+    if (storages.length <= 1) return layOutHomeland(pieces, cells, storage);
+
+    const areaOfPiece = p => (p.cluster ? [...p.buildings, ...p.plots] : p.members)
+        .reduce((sum, m) => sum + m.w * m.h, 0);
+    const mergedGroup = name => {
+        if (storages.length === 2) return name === 'farm' ? 'farm' : 'work';
+        if (storages.length === 3) return name === 'farm' ? 'farm' : name === 'primary' ? 'primary' : 'work';
+        return name;
+    };
+    const groupOrder = storages.length === 2 ? ['farm', 'work']
+        : storages.length === 3 ? ['farm', 'primary', 'work']
+            : ['farm', 'primary', 'food', 'industry'];
+    const groups = groupOrder.map(name => ({
+        name,
+        pieces: pieces.filter(p => mergedGroup(p.layoutGroup || 'industry') === name),
+    })).filter(g => g.pieces.length);
+    if (groups.length === 0) return { ...layOut(pieces, { cells, storages }), storageAt: null };
+    const allocation = new Map(groups.map(g => [g.name, 1]));
+    for (let left = storages.length - groups.length; left > 0; left--) {
+        const g = [...groups].sort((a, b) => {
+            const scoreA = a.pieces.reduce((sum, p) => sum + areaOfPiece(p), 0) / (allocation.get(a.name) + 1);
+            const scoreB = b.pieces.reduce((sum, p) => sum + areaOfPiece(p), 0) / (allocation.get(b.name) + 1);
+            return scoreB - scoreA;
+        })[0];
+        allocation.set(g.name, allocation.get(g.name) + 1);
+    }
+    let nextStorage = 0;
+    groups.forEach(group => {
+        const indices = Array.from({ length: allocation.get(group.name) }, () => nextStorage++);
+        const loads = new Map(indices.map(i => [i, 0]));
+        // Pieces have already been bundled by facility in app.js. Keep each whole bundle at one
+        // storage, balancing their physical area among any extra storages assigned to this zone.
+        [...group.pieces].sort((a, b) => areaOfPiece(b) - areaOfPiece(a)).forEach(piece => {
+            const index = [...indices].sort((a, b) => loads.get(a) - loads.get(b))[0];
+            piece.storageIndex = index;
+            loads.set(index, loads.get(index) + areaOfPiece(piece));
+        });
+        indices.forEach(i => { storages[i].label = group.name; });
+    });
+    // If there are more category groups than usable storage positions, merge overflow groups into
+    // the last anchor rather than dropping them.
+    pieces.forEach(piece => { if (!Number.isInteger(piece.storageIndex)) piece.storageIndex = storages.length - 1; });
+    const out = layOut(pieces, { cells, storages });
+    return { ...out, storageAt: null };
+}
+
 // Puts `plots` on `slots` (the plan's own arrangement, one slot per plot, each slot sized for the
 // plot that had it): within each facility and zone, the busiest crop takes the slot nearest the
 // Storage Unit.
-function assignSlots(plots, slots) {
+function assignSlots(plots, slots, anchor = { x: 0, y: 0 }) {
     const result = new Array(plots.length);
     const groups = new Map();
     plots.forEach((p, j) => {
@@ -294,7 +383,7 @@ function assignSlots(plots, slots) {
         groups.get(key).push(j);
     });
     for (const members of groups.values()) {
-        const nearest = members.map(j => slots[j]).sort((a, b) => Math.hypot(a.x + a.w / 2, a.y + a.h / 2) - Math.hypot(b.x + b.w / 2, b.y + b.h / 2));
+        const nearest = members.map(j => slots[j]).sort((a, b) => Math.hypot(a.x + a.w / 2 - anchor.x, a.y + a.h / 2 - anchor.y) - Math.hypot(b.x + b.w / 2 - anchor.x, b.y + b.h / 2 - anchor.y));
         const busiest = [...members].sort((a, b) => plots[b].weight - plots[a].weight);
         busiest.forEach((j, k) => { result[j] = nearest[k]; });
     }
@@ -303,7 +392,7 @@ function assignSlots(plots, slots) {
 
 // Packs `plots` (busiest first) where `allowed(rect, zone)` and `free(rect)`, each at the spot
 // nearest the Storage Unit, around the cluster's squares; null if one doesn't fit.
-function packPlots(plots, squares, allowed, free, buildings) {
+function packPlots(plots, squares, allowed, free, buildings, anchor = { x: 0, y: 0 }) {
     const minX = Math.min(...squares.map(s => s.x));
     const minY = Math.min(...squares.map(s => s.y));
     const maxX = Math.max(...squares.map(s => s.x + s.w));
@@ -319,7 +408,7 @@ function packPlots(plots, squares, allowed, free, buildings) {
             const list = [];
             for (let x = snap(minX - w + STEP); x <= maxX - STEP + EPSILON; x += STEP) {
                 for (let y = snap(minY - h + STEP); y <= maxY - STEP + EPSILON; y += STEP) {
-                    list.push({ x, y, w, h, distance: Math.hypot(x + w / 2, y + h / 2) });
+                    list.push({ x, y, w, h, distance: Math.hypot(x + w / 2 - anchor.x, y + h / 2 - anchor.y) });
                 }
             }
             spots.set(key, list.sort((a, b) => a.distance - b.distance));
@@ -419,8 +508,8 @@ function overlapArea(a, b) {
 
 const snap = v => Math.round(v / STEP) * STEP;
 
-function centerDistance(m, x, y) {
-    return Math.hypot(m.x + x + m.w / 2, m.y + y + m.h / 2);
+function centerDistance(m, x, y, anchor = { x: 0, y: 0 }) {
+    return Math.hypot(m.x + x + m.w / 2 - anchor.x, m.y + y + m.h / 2 - anchor.y);
 }
 
 function overlaps(a, b) {

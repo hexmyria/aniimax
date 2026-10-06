@@ -2,10 +2,10 @@
 
 import {
     FACILITIES, FACILITY_CATEGORIES, FACILITY_CATEGORY_BY_NAME, FACILITY_FOOTPRINTS, HOMELAND_PLOTS, HOMELAND_PLOT_SIZE,
-    MAX_HOME_LEVEL, ANIIMO_MAX, simpleSetup,
+    MAX_HOME_LEVEL, ANIIMO_MAX, STORAGE_UNIT_MAX, simpleSetup,
     LEVEL_UP_COSTS, LEVEL_UP_CHAINS, SPECIAL_RECIPES, SEASON, ANIIPOD_TIERS, PERSONALITY_PAIRS, personalityLetter, opposedPersonality,
     facilityDisplayRank,
-} from './facility-config.js?v=season1';
+} from './facility-config.js?v=season2';
 import { createShareUrl, readShareHash, urlWithoutShare } from './share-config.js';
 import { sharedFacilityUtilization, theoreticalUtilization } from './utilization.js?v=1';
 
@@ -1171,9 +1171,9 @@ function improvementsChecked(best, status, open) {
 }
 
 // --- Homeland layout -------------------------------------------------------------------
-// The whole homeland around one Storage Unit (see layout.js): each finished batch is carried
-// there, so the busiest facilities sit closest. Environment buildings keep the plots they cover
-// exactly as planned, moving as one block. Facilities with no known size are left out and named.
+// The whole homeland around the RV level's Storage Units (see layout.js): each production zone
+// carries to its assigned one, so its busiest facilities sit closest. Environment buildings keep
+// the plots they cover exactly as planned, moving as one block. Unknown sizes are left out.
 
 // Trips per hour for each unit of a plan row: one per finished batch.
 function tripsPerUnit(step) {
@@ -1185,6 +1185,54 @@ function tripsPerUnit(step) {
 // Whether a crop needs a growing environment: grown without one, a building's temperature
 // would change it. Crops that need none grow the same anywhere.
 const needsEnvironment = item => !!recipeIndex.find(r => r.name === item)?.environment;
+
+const PRIMARY_LAYOUT_FACILITIES = new Set([
+    'Mine', 'Well', 'Tidewhisper Sandcastle', 'Dewy House', 'Nimbus Bed',
+    'Starfall Hammock', 'Floral Windmill',
+]);
+const FOOD_LAYOUT_FACILITIES = new Set([
+    'Claw Game Cooker', 'Jukebox Dryer', 'Simmering Pot', 'Phonolfactory Table',
+    'Bouncy Brew Keg', 'Blazing Stove', 'Pickling Jar',
+]);
+const FARM_LAYOUT_FACILITIES = new Set(['Farmland', 'Woodland', 'Heat Furnace', 'Cooling Unit', 'Sunlamp']);
+
+function layoutGroupFor(piece) {
+    if (piece.cluster) return 'farm';
+    const facility = piece.members[0]?.facility;
+    if (FARM_LAYOUT_FACILITIES.has(facility)) return 'farm';
+    if (PRIMARY_LAYOUT_FACILITIES.has(facility)) return 'primary';
+    if (FOOD_LAYOUT_FACILITIES.has(facility)) return 'food';
+    return 'industry';
+}
+
+// A facility type is one movable island. Keeping equal processors physically together makes the
+// suggested layout readable in game; the multi-storage layout still chooses the island's best
+// orientation and position around its category's storage.
+function bundleLayoutFacilities(pieces) {
+    const fixed = [];
+    const groups = new Map();
+    pieces.forEach(piece => {
+        piece.layoutGroup = layoutGroupFor(piece);
+        if (piece.cluster || piece.members.length !== 1 || !['food', 'industry'].includes(piece.layoutGroup)) {
+            fixed.push(piece);
+            return;
+        }
+        const key = `${piece.layoutGroup}|${piece.members[0].facility}`;
+        groups.set(key, [...(groups.get(key) || []), piece.members[0]]);
+    });
+    groups.forEach((members, key) => {
+        const w = members[0].w;
+        const h = members[0].h;
+        const columns = Math.max(1, Math.ceil(Math.sqrt(members.length * h / w)));
+        const arranged = members.map((member, i) => ({
+            ...member,
+            x: (i % columns) * w,
+            y: Math.floor(i / columns) * h,
+        }));
+        fixed.push({ members: arranged, layoutGroup: key.split('|')[0] });
+    });
+    return fixed;
+}
 
 // The plan as pieces for `layOut`: environment blocks, then one piece per other facility unit,
 // then whatever the player owns that the plan doesn't use.
@@ -1302,7 +1350,7 @@ function homelandPieces(plan, input) {
         const building = f.name in ENVIRONMENT_BUILDING_SIZES;
         for (let i = 0; i < extra; i++) pieces.push({ members: [{ x: 0, y: 0, w: footprint[0], h: footprint[1], weight: 0, facility: f.name, crop: null, building, mode: null }] });
     });
-    return { pieces, unplaced: [...unplaced] };
+    return { pieces: bundleLayoutFacilities(pieces), unplaced: [...unplaced] };
 }
 
 // Colors for the layout: crops and Aniimo materials as in the environment maps, the rest by
@@ -1381,11 +1429,13 @@ function renderHomelandLayout(plan) {
         layoutWorker = null;
         if (runId !== layoutRunId) return;
         const layout = event.data;
-        const at = layout.storageAt;
         // Buildings carry nothing themselves.
         const members = layout.pieces.flatMap(p => p.members).map(m => ({ ...m, weight: m.weight || 0 }));
         const trips = members.reduce((sum, m) => sum + m.weight, 0);
-        const walked = members.reduce((sum, m) => sum + m.weight * Math.hypot(m.x + m.w / 2 - at.x, m.y + m.h / 2 - at.y), 0);
+        const walked = members.reduce((sum, m) => {
+            const storage = storageForMember(layout, m);
+            return sum + m.weight * Math.hypot(m.x + m.w / 2 - (storage.x + storage.w / 2), m.y + m.h / 2 - (storage.y + storage.h / 2));
+        }, 0);
         const noRoom = [...new Set(layout.unplaced.map(i => {
             const piece = pieces[i];
             return piece.cluster ? `${piece.buildings[0].facility} and its plots` : piece.members[0].facility;
@@ -1394,8 +1444,9 @@ function renderHomelandLayout(plan) {
             noRoom.length ? `No room found in RV ${homeLevel}'s plots for: ${noRoom.join(', ')}.` : '',
             unplaced.length ? `Not placed, size unknown: ${unplaced.join(', ')}.` : '',
         ].filter(Boolean).join(' ');
+        const storageCount = (layout.storages || [layout.storage]).length;
         document.getElementById('layout-summary').textContent = `${trips > 0
-            ? `${formatNumber(Math.round(trips))} trips/hour to the Storage Unit, ${(walked / trips).toFixed(1)} tiles each on average, in the ${cells.length} plot${cells.length === 1 ? '' : 's'} open at RV ${homeLevel}.`
+            ? `${formatNumber(Math.round(trips))} trips/hour to ${storageCount} Storage Unit${storageCount === 1 ? '' : 's'}, ${(walked / trips).toFixed(1)} tiles each on average, in the ${cells.length} plot${cells.length === 1 ? '' : 's'} open at RV ${homeLevel}.`
             : 'Nothing in this plan is carried to the Storage Unit.'}${notes ? ` ${notes}` : ''}`;
         lastLayout = { layout, homeLevel };
         drawLayout(lastLayout);
@@ -1408,7 +1459,11 @@ function renderHomelandLayout(plan) {
         document.getElementById('layout-summary').textContent = 'The layout couldn\'t be worked out.';
         setStep('layout', 'fail');
     };
-    layoutWorker.postMessage({ pieces, cells: cells.map(({ x, y, w, h }) => ({ x, y, w, h })) });
+    layoutWorker.postMessage({
+        pieces,
+        cells: cells.map(({ x, y, w, h }) => ({ x, y, w, h })),
+        storageCount: STORAGE_UNIT_MAX[homeLevel - 1] || 1,
+    });
 }
 
 // Stops a layout still being worked out, so it can't land over a newer plan.
@@ -1424,6 +1479,15 @@ function stopLayout() {
 let layoutShowsWhole = false;
 let lastLayout = null;
 
+const STORAGE_GROUP_LABELS = {
+    farm: 'Farming', primary: 'Gathering', food: 'Food processing', industry: 'Crafting and industry', work: 'Processing',
+};
+
+function storageForMember(layout, member) {
+    const storages = layout.storages || [layout.storage];
+    return storages[Math.min(member.storageIndex || 0, storages.length - 1)];
+}
+
 function homelandSvg(layout, homeLevel) {
     // Each environment building in use covers the 9x9 square around its center, drawn under
     // everything in its mode's color as on the building's own map.
@@ -1433,7 +1497,8 @@ function homelandSvg(layout, homeLevel) {
     // The whole homeland, its plots marked out and the ones not open yet shaded.
     const plots = homelandPlots();
     // Zoomed to what's placed, a couple of tiles around it, unless the whole homeland is asked for.
-    const placed = [layout.storage, ...layout.pieces.flatMap(p => p.members)];
+    const storages = layout.storages || [layout.storage];
+    const placed = [...storages, ...layout.pieces.flatMap(p => p.members)];
     const whole = layoutShowsWhole;
     const minX = whole ? -1 : Math.floor(Math.min(...placed.map(r => r.x))) - 2;
     const minY = whole ? -1 : Math.floor(Math.min(...placed.map(r => r.y))) - 2;
@@ -1452,7 +1517,8 @@ function homelandSvg(layout, homeLevel) {
     const maxTrips = Math.max(...layout.pieces.flatMap(p => p.members.map(m => m.weight || 0)), 1e-9);
     const shapes = layout.pieces.flatMap(p => p.members).map(m => {
         const color = layoutColor(m);
-        const away = Math.hypot(m.x + m.w / 2 - (layout.storage.x + layout.storage.w / 2), m.y + m.h / 2 - (layout.storage.y + layout.storage.h / 2));
+        const storage = storageForMember(layout, m);
+        const away = Math.hypot(m.x + m.w / 2 - (storage.x + storage.w / 2), m.y + m.h / 2 - (storage.y + storage.h / 2));
         const tip = tipAttrs(m.facility, {
             detail: m.jobs ? m.jobs.map(j => prettyItem(j.item)).join(', ') : m.crop ? prettyItem(m.crop) : m.building && m.mode ? m.mode : 'Idle',
             stats: m.weight > 0 ? `${formatRate(m.weight)} trips/hour · ${away.toFixed(1)} tiles from storage` : '',
@@ -1481,14 +1547,18 @@ function homelandSvg(layout, homeLevel) {
         return `<rect x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" fill="none"
             stroke="${tint}" stroke-opacity="0.8" stroke-dasharray="0.35,0.25" stroke-width="0.08" />`;
     }).join('');
-    const s = layout.storage;
     // A line from everything carried to the Storage Unit, each drawn once its first batch is in,
     // and a ring for the batch it's on (see "Deliveries"), in the same order as `layoutFlows`.
     const flowList = layoutFlows(layout);
     const flows = flowList.map(f => `<line x1="${f.x1}" y1="${f.y1}" x2="${f.x2}" y2="${f.y2}" class="layout-flow-line" />`).join('');
     const rings = flowList.map(f => `<g class="layout-ring" transform="translate(${f.rx.toFixed(2)} ${f.ry.toFixed(2)})">
             <circle r="${f.ring.toFixed(2)}" class="ring-track" /><circle r="${f.ring.toFixed(2)}" class="ring-fill" pathLength="1" stroke-dasharray="0 1" transform="rotate(-90)" /></g>`).join('');
-    const totalTrips = layout.pieces.flatMap(p => p.members).reduce((sum, m) => sum + (m.weight || 0), 0);
+    const storageShapes = storages.map((s, i) => {
+        const label = STORAGE_GROUP_LABELS[s.label] || 'Storage';
+        const trips = layout.pieces.flatMap(p => p.members).filter(m => (m.storageIndex || 0) === i).reduce((sum, m) => sum + (m.weight || 0), 0);
+        return `<g class="layout-piece layout-storage-unit" ${tipAttrs(`Storage Unit ${i + 1}`, { detail: label, stats: trips > 0 ? `${formatRate(trips)} trips/hour` : '' })}><rect x="${s.x + 0.04}" y="${s.y + 0.04}" width="${s.w - 0.08}" height="${s.h - 0.08}" rx="0.2" class="layout-storage" />
+        <text x="${s.x + s.w / 2}" y="${s.y + s.h / 2}" font-size="0.65" class="layout-storage-text">S${i + 1}</text></g>`;
+    }).join('');
     return `<svg class="layout-svg" viewBox="${minX} ${minY} ${maxX - minX} ${maxY - minY}" role="img" aria-label="Homeland layout">
         <defs><pattern id="layout-locked" width="1" height="1" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
             <line x1="0" y1="0" x2="0" y2="1" class="layout-hatch" /></pattern></defs>
@@ -1499,8 +1569,7 @@ function homelandSvg(layout, homeLevel) {
         <g class="layout-coverage-edges" pointer-events="none">${coverageEdges}</g>
         <g class="layout-rings" pointer-events="none">${rings}</g>
         <g class="layout-flows" pointer-events="none">${flows}<g class="layout-dots"></g></g>
-        <g class="layout-piece layout-storage-unit" ${tipAttrs('Storage Unit', { detail: 'Where everything is carried', stats: totalTrips > 0 ? `${formatRate(totalTrips)} trips/hour` : '' })}><rect x="${s.x + 0.04}" y="${s.y + 0.04}" width="${s.w - 0.08}" height="${s.h - 0.08}" rx="0.2" class="layout-storage" />
-        <text x="${s.x + s.w / 2}" y="${s.y + s.h / 2}" font-size="0.8" class="layout-storage-text">SU</text></g>
+        ${storageShapes}
     </svg>`;
 }
 
@@ -1529,10 +1598,10 @@ let layoutSim = null;
 // long a batch takes and its pace in the plan (batches a second). Most pieces have one; a Bench
 // or Kiln unit has one per tier it takes turns on (see `homelandPieces`).
 function layoutFlows(layout) {
-    const s = layout.storage;
-    const x2 = s.x + s.w / 2;
-    const y2 = s.y + s.h / 2;
     return layout.pieces.flatMap(p => p.members).filter(m => m.weight > 0 && m.crop && m.cycle > 0).map(m => {
+        const storage = storageForMember(layout, m);
+        const x2 = storage.x + storage.w / 2;
+        const y2 = storage.y + storage.h / 2;
         const x1 = m.x + m.w / 2;
         const y1 = m.y + m.h / 2;
         const ring = Math.min(0.45, Math.min(m.w, m.h) * 0.22);
