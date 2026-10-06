@@ -1218,7 +1218,7 @@ function bundleLayoutFacilities(pieces) {
     const groups = new Map();
     pieces.forEach(piece => {
         piece.layoutGroup = layoutGroupFor(piece);
-        if (piece.cluster || piece.members.length !== 1 || !['food', 'industry'].includes(piece.layoutGroup)) {
+        if (piece.cluster || piece.members.length !== 1 || !['primary', 'food', 'industry'].includes(piece.layoutGroup)) {
             fixed.push(piece);
             return;
         }
@@ -1226,15 +1226,23 @@ function bundleLayoutFacilities(pieces) {
         groups.set(key, [...(groups.get(key) || []), piece.members[0]]);
     });
     groups.forEach((members, key) => {
+        const facility = members[0].facility;
         const w = members[0].w;
         const h = members[0].h;
-        const columns = Math.max(1, Math.ceil(Math.sqrt(members.length * h / w)));
-        const arranged = members.map((member, i) => ({
+        // Use the Lv.20 capacity to keep an island's grid stable: upgrading the RV appends a
+        // machine into an existing future slot instead of reshaping and moving the whole island.
+        const config = FACILITIES.find(f => f.name === facility);
+        const futureCount = Math.max(members.length, config?.counts?.at(-1) || members.length);
+        const columns = Math.max(1, Math.ceil(Math.sqrt(futureCount * h / w)));
+        const all = [...members, ...Array.from({ length: futureCount - members.length }, () => ({
+            ...members[0], weight: 0, crop: null, jobs: null, cycle: null, reserved: true,
+        }))];
+        const arranged = all.map((member, i) => ({
             ...member,
             x: (i % columns) * w,
             y: Math.floor(i / columns) * h,
         }));
-        fixed.push({ members: arranged, layoutGroup: key.split('|')[0] });
+        fixed.push({ members: arranged, layoutGroup: key.split('|')[0], expansionFacility: facility });
     });
     return fixed;
 }
@@ -1496,6 +1504,7 @@ function renderHomelandLayout(plan) {
     layoutWorker.postMessage({
         pieces,
         cells: cells.map(({ x, y, w, h }) => ({ x, y, w, h })),
+        futureCells: homelandPlots().map(({ x, y, w, h }) => ({ x, y, w, h })),
         storageCount: STORAGE_UNIT_MAX[homeLevel - 1] || 1,
     });
 }
@@ -1569,6 +1578,9 @@ function homelandSvg(layout, homeLevel) {
             return `<g class="env-building" ${tip}><rect x="${m.x + 0.05}" y="${m.y + 0.05}" width="${m.w - 0.1}" height="${m.h - 0.1}" rx="0.3"
                 fill="${color}" fill-opacity="${m.mode ? 1 : 0.25}" stroke="currentColor" stroke-opacity="0.6" stroke-width="0.08" />
                 ${m.mode ? environmentBuildingIcon(m.facility, m.mode, m.x + m.w / 2, m.y + m.h / 2) : ''}</g>`;
+        }
+        if (m.reserved) {
+            return `<g class="layout-piece layout-future-slot" ${tipAttrs(m.facility, { detail: 'Future expansion slot', color })}><rect x="${m.x + 0.08}" y="${m.y + 0.08}" width="${m.w - 0.16}" height="${m.h - 0.16}" rx="0.2" stroke="${color}" />${label}</g>`;
         }
         return `<g class="layout-piece${m.powered ? ' layout-powered' : ''}" ${tip}><rect x="${m.x + 0.04}" y="${m.y + 0.04}" width="${m.w - 0.08}" height="${m.h - 0.08}" rx="0.2"
             fill="${color}" fill-opacity="${fill.toFixed(2)}" stroke="${color}" stroke-width="0.06" />${label}</g>`;

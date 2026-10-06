@@ -6,8 +6,8 @@ const ready = import('./layout.js' + new URL(import.meta.url).search);
 
 self.onmessage = async (event) => {
     const { layOutHomeland, layOutZonedHomeland } = await ready;
-    const { pieces, cells, storageCount = 1 } = event.data;
+    const { pieces, cells, futureCells, storageCount = 1 } = event.data;
     self.postMessage(storageCount > 1
-        ? layOutZonedHomeland(pieces, cells, storageCount)
-        : layOutHomeland(pieces, cells));
+        ? layOutZonedHomeland(pieces, cells, storageCount, undefined, futureCells)
+        : layOutHomeland(pieces, cells, undefined, futureCells));
 };
