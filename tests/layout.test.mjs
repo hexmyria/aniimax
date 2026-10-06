@@ -44,6 +44,23 @@ test('a district turn is rejected when it would leave the open plots', () => {
     assert.deepEqual(result.pieces[0].members, layout.pieces[0].members);
 });
 
+test('future expansion slots may rotate through future plots', () => {
+    const layout = {
+        storage: { x: 4, y: 4, w: 2, h: 2, label: 'work' },
+        storages: [{ x: 4, y: 4, w: 2, h: 2, label: 'work' }],
+        pieces: [{ layoutGroup: 'industry', members: [
+            { x: 2, y: 4, w: 2, h: 2, layoutGroup: 'industry' },
+            { x: 8, y: 4, w: 2, h: 2, reserved: true, layoutGroup: 'industry' },
+        ] }],
+    };
+    const open = [{ x: 0, y: 0, w: 8, h: 7 }];
+    const future = [{ x: 0, y: 0, w: 12, h: 12 }];
+    const result = rotateLayoutDistricts(layout, open, { work: 1 }, future);
+    assert.deepEqual(result.rejectedRotations, []);
+    assert.notDeepEqual(result.pieces[0].members, layout.pieces[0].members);
+    assert.ok(result.pieces[0].members.find(member => member.reserved).y >= 7);
+});
+
 test('four-storage layout merges workshops and assigns the spare by hauling demand', () => {
     const member = (facility, layoutGroup) => ({
         layoutGroup,
