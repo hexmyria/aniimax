@@ -121,11 +121,11 @@
                     </div>
 
                     <div id="coins-config" hidden>
-                        <p class="hint">Maximizes Home Coins with fixed recipes for unattended operation.</p>
+                        <p class="hint">Maximizes Home Coins with fixed recipes, then uses equally profitable spare capacity for the next RV's materials.</p>
                     </div>
 
                     <div id="event-strategy-config" hidden>
-                        <p class="hint">Maximizes Harvest Moon Points first, then Home Coins with the remaining capacity. Enable the event recipes you have unlocked below.</p>
+                        <p class="hint">Maximizes Harvest Moon Points first, then prepares the next RV's materials. Enable the event recipes you have unlocked below.</p>
                         <p class="hint small"><strong>Points per item:</strong> Moondew Radish and Waxing Moon Pepper 1; Roasted Waxing Moon Pepper and Moondew Radish Slices 4; Umbral Hot Pot, Umbral Sweet and Spicy Sauce, Umbral Pickle and Harvest Platter 8.</p>
                     </div>
 
@@ -147,7 +147,7 @@
                     </div>
 
                     <div id="level-up-config">
-                        <p class="hint">Gets everything your next RV level costs as soon as possible, then earns as many Home Coins as that leaves room for.</p>
+                        <p class="hint">Gets everything your next RV level costs as soon as possible, then keeps stockpiling its Woodworking Bench and Chimney Kiln materials.</p>
                         <div class="input-row" id="level-up-target-row">
                             <div class="input-field">
                                 <label for="level-up-target">Level up to RV</label>
@@ -163,7 +163,7 @@
                     </div>
 
                     <div id="daily-orders-config" hidden>
-                        <p class="hint">Enter the orders currently on your board. The plan reserves every requested item, finishes all orders as soon as possible, then uses the remaining capacity for Home Coins.</p>
+                        <p class="hint">Enter the orders currently on your board. The plan reserves every requested item, finishes all orders as soon as possible, then prepares the next RV's materials.</p>
                         <p class="hint small" id="daily-order-cap"></p>
                         <datalist id="daily-order-options"></datalist>
                         <details class="explain" id="daily-order-stock">
@@ -590,7 +590,7 @@
             }
         });
     </script>
-    <script type="module" src="i18n.js?v=strategy-modes1"></script>
-    <script type="module" src="app.js?v=whole-counts1"></script>
+    <script type="module" src="i18n.js?v=level-materials1"></script>
+    <script type="module" src="app.js?v=level-materials1"></script>
 </body>
 </html>
