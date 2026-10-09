@@ -44,6 +44,9 @@ const dynamic = {
   'Daily-order plan: shared facilities switch recipes only as needed; return them to the normal plan after every order is ready.':'デイリー注文対応：共用設備は必要な間だけレシピを切り替えます。全注文品が揃ったら通常計画へ戻してください。',
   'Search order items':'注文品を検索','Pick an order item from the list.':'一覧から注文品を選択してください。',
   'Order quantity':'注文数','Other':'その他','Custom order quantity':'その他の注文数','Subtract items already in stock':'所持品を差し引く','Optional. Enter stock counts below only when you want the plan to make the remaining amount.':'任意項目です。所持分を除いた残りだけ生産したい場合に入力してください。',
+  'Event Points':'イベントポイント','Custom':'詳細設定','Maximizes Home Coins with fixed recipes for unattended operation.':'レシピを固定した放置運用でホームコインを最大化します。','Maximizes Harvest Moon Points first, then Home Coins with the remaining capacity. Enable the event recipes you have unlocked below.':'収穫月ポイントを最優先し、残った生産力でホームコインを最大化します。下で解放済みのイベントレシピを有効にしてください。','Points per item:':'1個あたりのポイント：',
+  'Moondew Radish and Waxing Moon Pepper 1; Roasted Waxing Moon Pepper and Moondew Radish Slices 4; Umbral Hot Pot, Umbral Sweet and Spicy Sauce, Umbral Pickle and Harvest Platter 8.':'月露大根・満月椒は1、焼き満月椒・月露大根の飾り切りは4、双月あったかシチュー・双月甘辛ソース・双月の漬物・豊穣の盛り合わせは8。',
+  'same unit(s)':'同じ設備','manually switch this facility between the listed recipes':'表示されたレシピ間はこの設備を手動で切替','For a daily order; manually switch this facility between the listed recipes':'デイリー注文用。表示されたレシピ間はこの設備を手動で切り替えます。',
   'For a daily order':'デイリー注文用','Every order is already in stock.':'すべての注文品を所持しています。','Daily orders':'デイリー注文','Order item':'注文品','Required':'必要数','In stock':'所持数','Select an item':'アイテムを選択','Add order slot':'注文枠を追加','Fastest Daily Orders':'デイリー注文を最短達成','Profit before orders are ready':'注文品完成までの利益','Orders ready':'注文品完成',
   'Selected E-mode facilities exceed generator output by':'選択した電力モード設備の消費電力が発電量を超えています。超過：','selected E-mode facilities are outside the available power grid.':'件の電力モード設備に配電できません。','selected E-mode facility is outside the available power grid.':'件の電力モード設備に配電できません。',
   'any level':'レベル不問','Coarse-Sifted Ore':'粗粒骨材','River-Washed Stones':'水磨き石','Premium River-Washed Stones':'上級水磨き石','Sugar-Roasted Chestnuts':'焼き甘栗','Flowers in a Bottle':'生け花',
@@ -209,6 +212,7 @@ function translateText(value) {
     .replace(/^RV (\d+) level-up$/, 'RV $1レベルアップ')
     .replace(/^RV (\d+) costs$/, 'RV $1の必要素材')
     .replace(/^RV (\d+) normally holds (\d+) orders\. You can add up to (\d+) slots\.$/, 'RV $1の通常上限は$2枠です。手動で最大$3枠まで追加できます。')
+    .replace(/^(\d+) total$/, '合計$1台')
     .replace(/^Clear order (\d+)$/, '注文$1を消去')
     .replace(/^Move order (\d+) up$/, '注文$1を上へ移動')
     .replace(/^Move order (\d+) down$/, '注文$1を下へ移動')

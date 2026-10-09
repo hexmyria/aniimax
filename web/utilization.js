@@ -24,3 +24,11 @@ export function sharedFacilityUtilization(rows, facility) {
     if (capacity <= 0) return null;
     return Math.max(0, Math.min(1, busy / capacity));
 }
+
+// Physical units needed when finite jobs are run one after another manually. Individual recipe
+// rows each round up to a unit for display, but their combined busy time is the actual capacity.
+export function sharedPhysicalCount(rows, facility) {
+    const producing = rows.filter(step => step.facility === facility && step.status === 'producing');
+    if (producing.length < 2 || producing.some(step => !Number.isFinite(step.busy_units))) return null;
+    return Math.max(1, Math.ceil(producing.reduce((sum, step) => sum + step.busy_units, 0) - 1e-6));
+}

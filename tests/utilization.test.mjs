@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { sharedFacilityUtilization, theoreticalUtilization } from '../web/utilization.js';
+import { sharedFacilityUtilization, sharedPhysicalCount, theoreticalUtilization } from '../web/utilization.js';
 
 test('theoretical utilization is busy units divided by available units', () => {
     assert.equal(theoreticalUtilization({ status: 'producing', busy_units: 0.75, facility_count: 2 }), 0.375);
@@ -20,4 +20,14 @@ test('time-sharing facilities show the combined load of their recipes', () => {
         { facility: 'Chimney Kiln', status: 'producing', busy_units: 0.8, facility_count: 1 },
     ], 'Chimney Kiln'), 0.8);
     assert.equal(sharedFacilityUtilization(rows, 'Crafting Table'), null);
+});
+
+test('finite jobs count shared physical processors only once', () => {
+    const rows = [
+        { facility: 'Simmering Pot', status: 'producing', busy_units: 0.3, facility_count: 1 },
+        { facility: 'Simmering Pot', status: 'producing', busy_units: 0.4, facility_count: 1 },
+        { facility: 'Simmering Pot', status: 'producing', busy_units: 0.2, facility_count: 1 },
+    ];
+    assert.equal(sharedPhysicalCount(rows, 'Simmering Pot'), 1);
+    assert.equal(sharedPhysicalCount([...rows, { ...rows[0], busy_units: 0.6 }], 'Simmering Pot'), 2);
 });

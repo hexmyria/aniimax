@@ -7,7 +7,7 @@ import {
     facilityDisplayRank, ELECTRIC_FACILITY_POWER, POWER_GRID,
 } from './facility-config.js?v=power-size1';
 import { createShareUrl, readShareHash, urlWithoutShare } from './share-config.js';
-import { sharedFacilityUtilization, theoreticalUtilization } from './utilization.js?v=1';
+import { sharedFacilityUtilization, sharedPhysicalCount, theoreticalUtilization } from './utilization.js?v=2';
 import { routePowerGrid } from './power-layout.js?v=full-coverage1';
 
 let wasmReady = false;
@@ -366,7 +366,7 @@ let rateUnitChosen = false;
 function getPersistedFieldIds() {
     return [
         'target-amount', 'current-amount',
-        'strategy-level-up', 'strategy-priorities', 'strategy-daily-orders', 'level-up-target',
+        'strategy-coins', 'strategy-event', 'strategy-level-up', 'strategy-priorities', 'strategy-daily-orders', 'level-up-target',
         'mode-simple', 'mode-advanced', 'home-level',
         'ecological-module-level', 'kitchen-module-level',
         'resource-detector-level', 'crafting-module-level',
@@ -1313,9 +1313,12 @@ function homelandPieces(plan, input) {
 
     // Recipes taking turns on the same units (the Bench's and Kiln's tiers) share them: as many
     // units as their busy time together needs, each running every tier in turn at its share.
-    const takesTurns = step => !plan.dedicated_level_up_facilities
-        && step.status === 'producing'
-        && !!recipeIndex.find(r => r.name === step.item_name)?.turns;
+    const takesTurns = step => {
+        const recipe = recipeIndex.find(r => r.name === step.item_name);
+        return !plan.dedicated_level_up_facilities
+            && step.status === 'producing'
+            && !!(recipe?.turns || planContext?.dailyOrders && recipe?.ingredients?.length);
+    };
     const turnGroups = new Map();
     steps.filter(takesTurns).forEach(step => turnGroups.set(step.facility, [...(turnGroups.get(step.facility) || []), step]));
     turnGroups.forEach((rows, facility) => {
@@ -2252,10 +2255,14 @@ function seasonAvailable() {
 }
 
 function seasonActive() {
-    return seasonAvailable() && document.getElementById('season-on').checked;
+    return seasonAvailable() && (document.getElementById('season-on').checked || isEventStrategy());
 }
 
 function renderSeason() {
+    const eventMode = document.getElementById('strategy-event');
+    if (!seasonAvailable() && eventMode.checked) document.getElementById('strategy-coins').checked = true;
+    eventMode.disabled = !seasonAvailable();
+    eventMode.closest('label').classList.toggle('disabled', !seasonAvailable());
     document.getElementById('season-section').hidden = !seasonAvailable();
     document.getElementById('season-config').hidden = !seasonActive();
     document.getElementById('season-notes').innerHTML = SEASON.recipeNotes.map(r => `
@@ -2502,6 +2509,14 @@ function isLevelUpStrategy() {
     return document.getElementById('strategy-level-up').checked;
 }
 
+function isCoinStrategy() {
+    return document.getElementById('strategy-coins').checked;
+}
+
+function isEventStrategy() {
+    return document.getElementById('strategy-event').checked;
+}
+
 function isDailyOrdersStrategy() {
     return document.getElementById('strategy-daily-orders').checked;
 }
@@ -2537,6 +2552,7 @@ function shownPriorities() {
 
 // The ticked priorities, best first; none for the level-up strategy.
 function activePriorities() {
+    if (isEventStrategy()) return ['season_points'];
     return isPriorityStrategy() ? shownPriorities().filter(p => p.on).map(p => p.target) : [];
 }
 
@@ -2862,17 +2878,22 @@ function renderStrategy() {
     renderSeason();
     const levelUp = isLevelUpStrategy();
     const daily = isDailyOrdersStrategy();
+    const custom = isPriorityStrategy();
+    const event = isEventStrategy();
+    document.getElementById('coins-config').hidden = !isCoinStrategy();
+    document.getElementById('event-strategy-config').hidden = !event;
     document.getElementById('level-up-config').style.display = levelUp ? 'block' : 'none';
     document.getElementById('daily-orders-config').hidden = !daily;
-    document.getElementById('priorities-config').style.display = levelUp || daily ? 'none' : 'block';
+    document.getElementById('priorities-config').style.display = custom ? 'block' : 'none';
     if (daily) {
         renderDailyOrders();
         return;
     }
-    if (!levelUp) {
+    if (custom) {
         renderPriorities();
         return;
     }
+    if (!levelUp) return;
 
     // Simple mode always plans the next RV level, so only Advanced picks one.
     document.getElementById('level-up-target-row').style.display = isSimpleMode() ? 'none' : '';
@@ -2899,6 +2920,8 @@ function renderStrategy() {
 }
 
 function attachStrategyHandlers() {
+    document.getElementById('strategy-coins').addEventListener('change', renderStrategy);
+    document.getElementById('strategy-event').addEventListener('change', renderStrategy);
     document.getElementById('strategy-level-up').addEventListener('change', renderStrategy);
     document.getElementById('strategy-priorities').addEventListener('change', renderStrategy);
     document.getElementById('strategy-daily-orders').addEventListener('change', renderStrategy);
@@ -3438,8 +3461,21 @@ function facilityPlanTableOf(groups, showMinimumLevel = false) {
     const allRows = groups.flatMap(group => group.rows);
     const sharedUtilization = new Map([...new Set(allRows.map(step => step.facility))]
         .map(facility => [facility, sharedFacilityUtilization(allRows, facility)]));
+    const dailySharedCounts = new Map();
+    if (planContext?.dailyOrders) {
+        [...new Set(allRows.map(step => step.facility))].forEach(facility => {
+            const processorRows = allRows.filter(step => step.facility === facility
+                && recipeIndex.find(recipe => recipe.name === step.item_name)?.ingredients?.length);
+            const count = sharedPhysicalCount(processorRows, facility);
+            if (count != null) {
+                dailySharedCounts.set(facility, count);
+                const busy = processorRows.reduce((sum, step) => sum + step.busy_units, 0);
+                sharedUtilization.set(facility, Math.max(0, Math.min(1, busy / count)));
+            }
+        });
+    }
     const body = groups
-        .map(group => (group.label ? `<tr class="facility-plan-group"><td colspan="${showMinimumLevel ? 8 : 7}">${group.label}</td></tr>` : '') + planRows(group.rows, showMinimumLevel, sharedUtilization))
+        .map(group => (group.label ? `<tr class="facility-plan-group"><td colspan="${showMinimumLevel ? 8 : 7}">${group.label}</td></tr>` : '') + planRows(group.rows, showMinimumLevel, sharedUtilization, dailySharedCounts))
         .join('');
     return `
         <div class="table-wrapper">
@@ -3462,7 +3498,8 @@ function facilityPlanTableOf(groups, showMinimumLevel = false) {
     `;
 }
 
-function planRows(rows, showMinimumLevel = false, sharedUtilization = new Map()) {
+function planRows(rows, showMinimumLevel = false, sharedUtilization = new Map(), dailySharedCounts = new Map()) {
+    const shownSharedFacilities = new Set();
     return rows.map(step => {
         const utilization = theoreticalUtilization(step);
         const total = sharedUtilization.get(step.facility);
@@ -3475,12 +3512,18 @@ function planRows(rows, showMinimumLevel = false, sharedUtilization = new Map())
             ? `<label class="power-choice" title="Display this facility type on the Crackle power grid; production calculations are unchanged"><input type="checkbox" data-power-facility="${step.facility}" ${poweredFacilities.has(step.facility) ? 'checked' : ''} ${canPower ? '' : 'disabled'}><span>${canPower ? 'Use' : `RV ${POWER_GRID.unlockRv}+`}</span></label>`
             : '—';
         const dailyTarget = planContext?.dailyOrders && dailyOrderGoal().cost.some(([name]) => name === step.item_name);
-        const sharing = dailyTarget && step.reason?.match(/; takes turns with .+$/)?.[0] || '';
-        const reason = dailyTarget ? `For a daily order${sharing}` : step.reason;
+        const sharedCount = dailySharedCounts.get(step.facility);
+        const count = sharedCount == null
+            ? step.facility_count
+            : shownSharedFacilities.has(step.facility) ? 'same unit(s)' : `${sharedCount} total`;
+        if (sharedCount != null) shownSharedFacilities.add(step.facility);
+        const reason = dailyTarget
+            ? `For a daily order${sharedCount == null ? '' : '; manually switch this facility between the listed recipes'}`
+            : `${step.reason}${sharedCount == null ? '' : '; manually switch this facility between the listed recipes'}`;
         return `
                     <tr class="status-${step.status}">
                         <td data-label="Facility">${step.facility}</td>
-                        <td data-label="Count">${step.facility_count}</td>
+                        <td data-label="Count">${count}</td>
                         <td data-label="Producing">${step.item_name ? prettyItem(step.item_name) : '-'}${unverifiedRowKeys.has(`${step.facility}|${step.item_name}`) ? '<span class="tag unverified" title="Not yet checked in game">unverified</span>' : ''}${step.item_name && step.status === 'producing' ? `<button type="button" class="skip-row" data-skip="${step.item_name}" title="Can't make this? Skip it and plan again" aria-label="Skip ${prettyItem(step.item_name)} and plan again">✕</button>` : ''}</td>
                         ${showMinimumLevel ? `<td data-label="Minimum facility level">${step.item_name ? `Lv.${recipeIndex.find(recipe => recipe.name === step.item_name && recipe.facility === step.facility)?.facilityLevel ?? '?'}+` : '-'}</td>` : ''}
                         <td data-label="Aniimo">${aniimoLabel(step)}</td>
