@@ -173,6 +173,9 @@ pub struct LevelUp {
     pub cost: Vec<(String, f64)>,
     #[serde(default)]
     pub stock: Vec<(String, f64)>,
+    /// Higher-priority rates that must remain satisfied while this finite goal is optimized.
+    #[serde(default)]
+    pub floors: Vec<(String, f64)>,
     /// Used by finite daily orders, whose recipes may take turns on one processing facility.
     #[serde(default)]
     pub share_processors: bool,
@@ -392,15 +395,17 @@ fn build_model<'a>(
     }
     // A floor naming a currency ("aniimo_exp", "aniipods") keeps a plan making that much of it
     // while it earns `currency`; those items need sell variables too, worth nothing here.
-    let floor_currencies: Vec<&str> = match goal {
-        Goal::Earn { floors } => floors.iter().map(|(name, _)| name.as_str()).collect(),
-        _ => Vec::new(),
+    let floors: &[(String, f64)] = match goal {
+        Goal::Earn { floors } => floors,
+        Goal::LevelUp(level_up)
+        | Goal::EarnWhileLevelingUp(level_up, _)
+        | Goal::StockUp(level_up, ..)
+        | Goal::StockUpOther(level_up, ..) => &level_up.floors,
+        Goal::MostOf(_) => &[],
     };
+    let floor_currencies: Vec<&str> = floors.iter().map(|(name, _)| name.as_str()).collect();
     let mut sold_of: Vec<(usize, &ProductionItem)> = Vec::new();
-    let food_floor = match goal {
-        Goal::Earn { floors } => floors.iter().find(|(name, _)| name == crate::models::FOOD_ENERGY).map_or(0.0, |(_, n)| *n),
-        _ => 0.0,
-    };
+    let food_floor = floors.iter().find(|(name, _)| name == crate::models::FOOD_ENERGY).map_or(0.0, |(_, n)| *n);
     let mut fed_of: Vec<(usize, &ProductionItem)> = Vec::new();
     for (&item_name, terms) in &mut balance {
         if let Some(&item) = all.get(item_name) {
@@ -635,32 +640,26 @@ fn build_model<'a>(
             })
             .collect()
     };
+    for (resource, floor) in floors {
+        if *floor <= 0.0 || resource == crate::models::FOOD_ENERGY {
+            continue;
+        }
+        let byproduct = byproduct_terms(resource);
+        if !byproduct.is_empty() {
+            model.constrain(byproduct, ComparisonOp::Ge, floor * (1.0 - 1e-6));
+            continue;
+        }
+        let mut sold: Vec<(usize, f64)> =
+            sold_of.iter().filter(|(_, item)| item.earns(resource) > 0.0).map(|&(v, item)| (v, item.earns(resource))).collect();
+        if resource == "coins" {
+            sold.extend(rate_of.iter().filter(|(r, _)| r.cost.unwrap_or(0.0) > 0.0).map(|&(r, v)| (v, -r.cost.unwrap_or(0.0))));
+        }
+        if !sold.is_empty() {
+            model.constrain(sold, ComparisonOp::Ge, floor * (1.0 - 1e-4));
+        }
+    }
     match goal {
-        Goal::Earn { floors } => {
-            for (resource, floor) in floors {
-                if *floor <= 0.0 {
-                    continue;
-                }
-                if resource == crate::models::FOOD_ENERGY {
-                    continue;
-                }
-                let byproduct = byproduct_terms(resource);
-                if !byproduct.is_empty() {
-                    // A hair of slack: the floor is another solve's exact maximum.
-                    model.constrain(byproduct, ComparisonOp::Ge, floor * (1.0 - 1e-6));
-                    continue;
-                }
-                // Otherwise it's a currency: everything sold for it, at its value, less seed costs
-                // for coins (seeds are paid in coins).
-                let mut sold: Vec<(usize, f64)> =
-                    sold_of.iter().filter(|(_, item)| item.earns(resource) > 0.0).map(|&(v, item)| (v, item.earns(resource))).collect();
-                if resource == "coins" {
-                    sold.extend(rate_of.iter().filter(|(r, _)| r.cost.unwrap_or(0.0) > 0.0).map(|&(r, v)| (v, -r.cost.unwrap_or(0.0))));
-                }
-                if !sold.is_empty() {
-                    model.constrain(sold, ComparisonOp::Ge, floor * (1.0 - 1e-4));
-                }
-            }
+        Goal::Earn { .. } => {
             // Maximizing a byproduct (Wood Blocks, Mineral Sand) rather than a currency.
             let byproduct = byproduct_terms(currency);
             if !byproduct.is_empty() {

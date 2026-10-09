@@ -117,6 +117,13 @@ async function exactPlanJson(pkg, payload, step = () => {}, first = () => {}) {
         stage.floors.push([target, Math.max(0, most.objective)]);
     }
 
+    // Every later finite-goal solve must retain the priorities already maximized above. Without
+    // these floors, optimizing next-RV materials can silently replace all event production.
+    if (input.level_up) {
+        input.level_up = { ...input.level_up, floors: stage.floors };
+        payload = JSON.stringify(input);
+    }
+
     let levelUpNote = null;
     const levelUp = JSON.parse(exact_level_up_problem(payload));
     if (levelUp.lp) {

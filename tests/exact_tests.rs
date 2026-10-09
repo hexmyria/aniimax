@@ -172,7 +172,7 @@ fn exact_grows_crops_without_their_environment() {
 
 fn level_up(cost: &[(&str, f64)], stock: &[(&str, f64)]) -> LevelUp {
     let list = |l: &[(&str, f64)]| l.iter().map(|(n, a)| (n.to_string(), *a)).collect();
-    LevelUp { cost: list(cost), stock: list(stock), share_processors: false }
+    LevelUp { cost: list(cost), stock: list(stock), floors: Vec::new(), share_processors: false }
 }
 
 /// Solves a level-up in both stages and checks the plan: the soonest level-up, then the most
@@ -456,6 +456,56 @@ fn exact_season_points_are_a_priority() {
     let kept = aniimax::exact::target_rate(&plan, &items, points);
     // Floors leave 0.01% of slack for the solver's tolerances.
     assert!(kept >= most.rate_per_second * (1.0 - 1.01e-4), "kept {kept} of {} points a second", most.rate_per_second);
+}
+
+#[test]
+fn exact_level_materials_keep_maximum_season_points() {
+    let Some(items) = load_items_with_season() else { return };
+    let counts = FacilityCounts::only(&[
+        ("Farmland", 6, 2),
+        ("Woodland", 3, 2),
+        ("Mine", 2, 2),
+        ("Woodworking Bench", 1, 2),
+        ("Chimney Kiln", 1, 2),
+    ]);
+    let points = solve_exact(
+        &items,
+        aniimax::models::SEASON_POINTS,
+        &counts,
+        &ModuleLevels::default(),
+        Goal::Earn { floors: &[] },
+        None,
+        None,
+    )
+    .expect("maximum season points")
+    .rate_per_second;
+    let mut primary = level_up(&[("standard_planks", 1.0)], &[]);
+    primary.floors.push((aniimax::models::SEASON_POINTS.to_string(), points));
+    let fastest = solve_exact(
+        &items,
+        "coins",
+        &counts,
+        &ModuleLevels::default(),
+        Goal::LevelUp(&primary),
+        None,
+        None,
+    )
+    .expect("materials while retaining points");
+    assert!(fastest.objective > 0.0);
+    let secondary = level_up(&[("sintered_ore_brick", 1.0)], &[]);
+    let stocked = solve_exact(
+        &items,
+        "coins",
+        &counts,
+        &ModuleLevels::default(),
+        Goal::StockUpOther(&primary, fastest.objective, &secondary),
+        None,
+        None,
+    )
+    .expect("secondary materials while retaining points");
+    let retained = aniimax::exact::target_rate(&stocked, &items, aniimax::models::SEASON_POINTS);
+    assert!(retained >= points * (1.0 - 2e-4), "retained {retained}, maximum {points}: {stocked:?}");
+    assert!(net_rates(&stocked, &items).get("sintered_ore_brick").copied().unwrap_or(0.0) > 0.0, "{stocked:?}");
 }
 
 // A goal counts each item from its first batch, so what makes a priority is split by item with
