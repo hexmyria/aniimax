@@ -1791,6 +1791,52 @@ details.explain p {
     margin-top: 0.6rem;
 }
 
+.daily-order-list {
+    display: grid;
+    gap: 0.55rem;
+    margin: 0.75rem 0;
+}
+
+.daily-order-row {
+    display: grid;
+    grid-template-columns: 2rem minmax(12rem, 1fr) minmax(5rem, 0.35fr) minmax(5rem, 0.35fr) auto;
+    gap: 0.55rem;
+    align-items: end;
+}
+
+.daily-order-number {
+    align-self: center;
+    color: var(--text-muted);
+    text-align: right;
+}
+
+.daily-order-row .input-field label {
+    font-size: 0.7rem;
+}
+
+.daily-order-row input {
+    padding: 0.45rem;
+}
+
+.daily-order-actions {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.daily-order-actions .tier-remove-btn {
+    padding-inline: 0.45rem;
+}
+
+@media (max-width: 680px) {
+    .daily-order-row {
+        grid-template-columns: 1.5rem minmax(0, 1fr) minmax(4.5rem, 0.32fr);
+    }
+
+    .daily-order-row .daily-order-have {
+        grid-column: 2 / 3;
+    }
+}
+
 #level-up-config .stock-grid .input-field {
     max-width: none;
 }
