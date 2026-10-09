@@ -2687,19 +2687,34 @@ function dailyOrderNormalCap() {
     return DAILY_ORDER_CAPS[dailyOrderRvLevel() - 1] || DAILY_ORDER_CAPS.at(-1);
 }
 
-function dailyOrderItemOptions(selected = '') {
+function dailyOrderRecipes() {
     const seen = new Set();
-    const recipes = recipeIndex.filter(recipe => {
+    return recipeIndex.filter(recipe => {
         if (recipe.sellCurrency === 'none' || recipe.name.startsWith('quick_') || recipe.name.endsWith('__uncovered')) return false;
         if (seen.has(recipe.name)) return false;
         seen.add(recipe.name);
         return true;
     });
-    if (selected && !seen.has(selected)) recipes.push({ name: selected, facility: '' });
-    return `<option value="">Select an item</option>${recipes
-        .sort((a, b) => prettyItem(a.name).localeCompare(prettyItem(b.name)))
-        .map(recipe => `<option value="${recipe.name}"${recipe.name === selected ? ' selected' : ''}>${prettyItem(recipe.name)}${recipe.facility ? ` — ${recipe.facility}` : ''}</option>`)
-        .join('')}`;
+}
+
+function dailyOrderItemLabel(recipe) {
+    if (!recipe) return '';
+    const translate = window.aniimaxTranslate || (value => value);
+    const english = prettyItem(recipe.name);
+    const localized = translate(english);
+    const item = localized === english ? english : `${localized} / ${english}`;
+    return `${item} — ${translate(recipe.facility)}`;
+}
+
+function dailyOrderRecipeFromText(value) {
+    const text = value.trim().toLocaleLowerCase();
+    if (!text) return null;
+    return dailyOrderRecipes().find(recipe =>
+        dailyOrderItemLabel(recipe).toLocaleLowerCase() === text
+        || recipe.name.toLocaleLowerCase() === text
+        || prettyItem(recipe.name).toLocaleLowerCase() === text
+        || (window.aniimaxTranslate?.(prettyItem(recipe.name)) || '').toLocaleLowerCase() === text
+    ) || null;
 }
 
 function renderDailyOrders() {
@@ -2711,10 +2726,14 @@ function renderDailyOrders() {
     while (dailyOrders.length < dailyOrderSlots) dailyOrders.push({ item: '', need: 0, have: 0 });
     document.getElementById('daily-order-cap').textContent = `RV ${dailyOrderRvLevel()} normally holds ${cap} orders. You can add up to ${DAILY_ORDER_MAX} slots.`;
     document.getElementById('daily-order-add').disabled = dailyOrderSlots >= DAILY_ORDER_MAX;
+    document.getElementById('daily-order-options').innerHTML = dailyOrderRecipes()
+        .sort((a, b) => dailyOrderItemLabel(a).localeCompare(dailyOrderItemLabel(b)))
+        .map(recipe => `<option value="${escapeText(dailyOrderItemLabel(recipe))}"></option>`)
+        .join('');
     list.innerHTML = dailyOrders.slice(0, dailyOrderSlots).map((order, index) => `
         <div class="daily-order-row" data-order-index="${index}">
             <span class="daily-order-number">${index + 1}</span>
-            <div class="input-field"><label>Order item</label><select data-order-field="item">${dailyOrderItemOptions(order.item)}</select></div>
+            <div class="input-field"><label>Order item</label><input type="search" list="daily-order-options" placeholder="Search order items" autocomplete="off" value="${escapeText(dailyOrderItemLabel(recipeIndex.find(recipe => recipe.name === order.item)) || prettyItem(order.item) || '')}" data-order-field="item"></div>
             <div class="input-field"><label>Required</label><input type="number" min="0" step="1" value="${order.need || ''}" data-order-field="need"></div>
             <div class="input-field daily-order-have"><label>In stock</label><input type="number" min="0" step="1" value="${order.have || ''}" data-order-field="have"></div>
             <span class="daily-order-actions">
@@ -2748,13 +2767,27 @@ function attachDailyOrderHandlers() {
         if (!row || !field) return;
         const index = Number(row.dataset.orderIndex);
         dailyOrders[index] ||= { item: '', need: 0, have: 0 };
-        dailyOrders[index][field] = field === 'item' ? e.target.value : Math.max(0, numberOrDefault(e.target.value, 0));
+        if (field === 'item') {
+            const recipe = dailyOrderRecipeFromText(e.target.value);
+            if (recipe) dailyOrders[index].item = recipe.name;
+            else if (!e.target.value.trim()) dailyOrders[index].item = '';
+        } else {
+            dailyOrders[index][field] = Math.max(0, numberOrDefault(e.target.value, 0));
+        }
         saveInputsToStorage();
     });
     list.addEventListener('change', e => {
         if (e.target.dataset.orderField === 'item') {
             const row = e.target.closest('[data-order-index]');
-            dailyOrders[Number(row.dataset.orderIndex)].item = e.target.value;
+            const recipe = dailyOrderRecipeFromText(e.target.value);
+            if (!recipe && e.target.value.trim()) {
+                e.target.setCustomValidity((window.aniimaxTranslate || (value => value))('Pick an order item from the list.'));
+                e.target.reportValidity();
+                return;
+            }
+            e.target.setCustomValidity('');
+            dailyOrders[Number(row.dataset.orderIndex)].item = recipe?.name || '';
+            e.target.value = recipe ? dailyOrderItemLabel(recipe) : '';
             saveInputsToStorage();
         }
     });
