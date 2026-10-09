@@ -43,6 +43,7 @@ const dynamic = {
   'Not enough processors for dedicated operation, so this plan switches recipes on shared Woodworking Benches or Chimney Kilns.':'設備数が専用稼働に足りないため、木工台または煙突鍛造炉を共有してレシピを切り替える計画です。',
   'Daily-order plan: shared facilities switch recipes only as needed; return them to the normal plan after every order is ready.':'デイリー注文対応：共用設備は必要な間だけレシピを切り替えます。全注文品が揃ったら通常計画へ戻してください。',
   'Search order items':'注文品を検索','Pick an order item from the list.':'一覧から注文品を選択してください。',
+  'Order quantity':'注文数','Other':'その他','Custom order quantity':'その他の注文数','Subtract items already in stock':'所持品を差し引く','Optional. Enter stock counts below only when you want the plan to make the remaining amount.':'任意項目です。所持分を除いた残りだけ生産したい場合に入力してください。',
   'For a daily order':'デイリー注文用','Every order is already in stock.':'すべての注文品を所持しています。','Daily orders':'デイリー注文','Order item':'注文品','Required':'必要数','In stock':'所持数','Select an item':'アイテムを選択','Add order slot':'注文枠を追加','Fastest Daily Orders':'デイリー注文を最短達成','Profit before orders are ready':'注文品完成までの利益','Orders ready':'注文品完成',
   'Selected E-mode facilities exceed generator output by':'選択した電力モード設備の消費電力が発電量を超えています。超過：','selected E-mode facilities are outside the available power grid.':'件の電力モード設備に配電できません。','selected E-mode facility is outside the available power grid.':'件の電力モード設備に配電できません。',
   'any level':'レベル不問','Coarse-Sifted Ore':'粗粒骨材','River-Washed Stones':'水磨き石','Premium River-Washed Stones':'上級水磨き石','Sugar-Roasted Chestnuts':'焼き甘栗','Flowers in a Bottle':'生け花',

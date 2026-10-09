@@ -430,7 +430,7 @@ function initFacilityTiers(data) {
 }
 
 function currentConfig() {
-    const data = { facilityTiers, poweredFacilities: [...poweredFacilities], levelUpStock, dailyOrders, dailyOrderSlots, skippedRecipes: [...skippedRecipes], unlockedSpecial: [...unlockedSpecial], priorities: priorityOrder, aniimoLevels, roster };
+    const data = { facilityTiers, poweredFacilities: [...poweredFacilities], levelUpStock, dailyOrders, dailyOrderSlots, dailyOrderShowStock, skippedRecipes: [...skippedRecipes], unlockedSpecial: [...unlockedSpecial], priorities: priorityOrder, aniimoLevels, roster };
     getPersistedFieldIds().forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
@@ -606,6 +606,7 @@ function loadInputsFromStorage(data) {
         have: Math.max(0, Number(order?.have) || 0),
     }));
     if (Number.isInteger(data.dailyOrderSlots)) dailyOrderSlots = Math.max(0, Math.min(DAILY_ORDER_MAX, data.dailyOrderSlots));
+    if (typeof data.dailyOrderShowStock === 'boolean') dailyOrderShowStock = data.dailyOrderShowStock;
     if (Array.isArray(data.skippedRecipes)) skippedRecipes = new Set(data.skippedRecipes.filter(n => typeof n === 'string'));
     if (Array.isArray(data.unlockedSpecial)) unlockedSpecial = new Set(data.unlockedSpecial.filter(n => typeof n === 'string'));
     if (Array.isArray(data.priorities)) {
@@ -2405,6 +2406,7 @@ const DAILY_ORDER_MAX = 20;
 const DAILY_ORDER_CAPS = [5, 6, 6, 7, 7, 9, 9, 9, 11, 11, 11, 13, 13, 13, 15, 15, 15, 17, 17, 17];
 let dailyOrders = [];
 let dailyOrderSlots = 0;
+let dailyOrderShowStock = false;
 
 // The highest ability level an Aniimo reaches, and the abilities that stop short of it; mirrors
 // `MAX_ANIIMO_LEVEL` and `ABILITY_DEFAULTS` in models.rs.
@@ -2724,6 +2726,10 @@ function renderDailyOrders() {
     const lastFilled = dailyOrders.reduce((last, order, i) => order?.item || order?.need || order?.have ? i + 1 : last, 0);
     dailyOrderSlots = Math.min(DAILY_ORDER_MAX, Math.max(cap, dailyOrderSlots, lastFilled));
     while (dailyOrders.length < dailyOrderSlots) dailyOrders.push({ item: '', need: 0, have: 0 });
+    dailyOrders.forEach(order => {
+        if (order.item && !(order.need > 0)) order.need = 2;
+    });
+    document.getElementById('daily-order-stock').open = dailyOrderShowStock;
     document.getElementById('daily-order-cap').textContent = `RV ${dailyOrderRvLevel()} normally holds ${cap} orders. You can add up to ${DAILY_ORDER_MAX} slots.`;
     document.getElementById('daily-order-add').disabled = dailyOrderSlots >= DAILY_ORDER_MAX;
     document.getElementById('daily-order-options').innerHTML = dailyOrderRecipes()
@@ -2734,8 +2740,12 @@ function renderDailyOrders() {
         <div class="daily-order-row" data-order-index="${index}">
             <span class="daily-order-number">${index + 1}</span>
             <div class="input-field"><label>Order item</label><input type="search" list="daily-order-options" placeholder="Search order items" autocomplete="off" value="${escapeText(dailyOrderItemLabel(recipeIndex.find(recipe => recipe.name === order.item)) || prettyItem(order.item) || '')}" data-order-field="item"></div>
-            <div class="input-field"><label>Required</label><input type="number" min="0" step="1" value="${order.need || ''}" data-order-field="need"></div>
-            <div class="input-field daily-order-have"><label>In stock</label><input type="number" min="0" step="1" value="${order.have || ''}" data-order-field="have"></div>
+            <div class="input-field daily-order-quantity"><label>Order quantity</label><span class="daily-order-amounts">
+                ${[2, 4, 6].map(amount => `<button type="button" data-order-need="${amount}" class="${order.item && order.need === amount ? 'selected' : ''}"${order.item ? '' : ' disabled'}>${amount}</button>`).join('')}
+                <button type="button" data-order-custom class="${order.item && ![2, 4, 6].includes(order.need) ? 'selected' : ''}"${order.item ? '' : ' disabled'}>Other</button>
+                <input type="number" min="1" step="1" value="${order.item && ![2, 4, 6].includes(order.need) ? order.need || '' : ''}" data-order-field="need" aria-label="Custom order quantity" ${!order.item || [2, 4, 6].includes(order.need) ? 'hidden' : ''}>
+            </span></div>
+            ${dailyOrderShowStock ? `<div class="input-field daily-order-have"><label>In stock</label><input type="number" min="0" step="1" value="${order.have || ''}" data-order-field="have"></div>` : ''}
             <span class="daily-order-actions">
                 <button type="button" class="tier-remove-btn" data-order-move="${index}" data-order-by="-1" aria-label="Move order ${index + 1} up"${index === 0 ? ' disabled' : ''}>↑</button>
                 <button type="button" class="tier-remove-btn" data-order-move="${index}" data-order-by="1" aria-label="Move order ${index + 1} down"${index + 1 >= dailyOrderSlots ? ' disabled' : ''}>↓</button>
@@ -2769,7 +2779,10 @@ function attachDailyOrderHandlers() {
         dailyOrders[index] ||= { item: '', need: 0, have: 0 };
         if (field === 'item') {
             const recipe = dailyOrderRecipeFromText(e.target.value);
-            if (recipe) dailyOrders[index].item = recipe.name;
+            if (recipe) {
+                dailyOrders[index].item = recipe.name;
+                if (!(dailyOrders[index].need > 0)) dailyOrders[index].need = 2;
+            }
             else if (!e.target.value.trim()) dailyOrders[index].item = '';
         } else {
             dailyOrders[index][field] = Math.max(0, numberOrDefault(e.target.value, 0));
@@ -2788,10 +2801,29 @@ function attachDailyOrderHandlers() {
             e.target.setCustomValidity('');
             dailyOrders[Number(row.dataset.orderIndex)].item = recipe?.name || '';
             e.target.value = recipe ? dailyOrderItemLabel(recipe) : '';
+            renderDailyOrders();
             saveInputsToStorage();
         }
     });
     list.addEventListener('click', e => {
+        const amountButton = e.target.closest('[data-order-need]');
+        if (amountButton) {
+            const row = amountButton.closest('[data-order-index]');
+            dailyOrders[Number(row.dataset.orderIndex)].need = Number(amountButton.dataset.orderNeed);
+            renderDailyOrders();
+            saveInputsToStorage();
+            return;
+        }
+        const customButton = e.target.closest('[data-order-custom]');
+        if (customButton) {
+            const row = customButton.closest('[data-order-index]');
+            const index = Number(row.dataset.orderIndex);
+            if ([2, 4, 6].includes(dailyOrders[index].need)) dailyOrders[index].need = 1;
+            renderDailyOrders();
+            saveInputsToStorage();
+            list.querySelector(`[data-order-index="${index}"] [data-order-field="need"]`)?.select();
+            return;
+        }
         const move = e.target.closest('[data-order-move]');
         if (move) {
             const from = Number(move.dataset.orderMove);
@@ -2815,6 +2847,12 @@ function attachDailyOrderHandlers() {
     document.getElementById('daily-order-add').addEventListener('click', () => {
         if (dailyOrderSlots >= DAILY_ORDER_MAX) return;
         dailyOrderSlots++;
+        renderDailyOrders();
+        saveInputsToStorage();
+    });
+    document.getElementById('daily-order-stock').addEventListener('toggle', e => {
+        if (dailyOrderShowStock === e.target.open) return;
+        dailyOrderShowStock = e.target.open;
         renderDailyOrders();
         saveInputsToStorage();
     });
