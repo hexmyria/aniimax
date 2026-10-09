@@ -741,6 +741,9 @@ pub struct JsPlanInput {
     /// planner then finds the soonest level-up, earning as much as it leaves room for.
     #[serde(default)]
     pub level_up: Option<crate::exact::LevelUp>,
+    /// Materials to maximize after the primary finite goal, before Home Coins.
+    #[serde(default)]
+    pub secondary_level_up: Option<crate::exact::LevelUp>,
     /// Recipes the plan may not use, for comparing against a plan someone suggests. Not on the page.
     #[serde(default)]
     pub exclude: Vec<String>,
@@ -1442,6 +1445,9 @@ struct JsStage {
 
 impl JsStage {
     fn goal<'a>(&'a self, input: &'a JsPlanInput) -> crate::exact::Goal<'a> {
+        if let (Some(level_up), Some(pace), Some(stock_up)) = (&input.level_up, self.pace, &input.secondary_level_up) {
+            return crate::exact::Goal::StockUpOther(level_up, pace, stock_up);
+        }
         match (&input.level_up, self.pace, self.coins) {
             (Some(level_up), Some(pace), Some(coins)) => crate::exact::Goal::StockUp(level_up, pace, coins),
             (Some(level_up), Some(pace), None) => crate::exact::Goal::EarnWhileLevelingUp(level_up, pace),
@@ -1505,7 +1511,9 @@ pub fn exact_plan(input_json: &str, stage_json: &str, solution_json: &str) -> St
     let currency = prepared.input.currency.clone();
     let goal = stage.goal(&prepared.input);
     let level_up = match goal {
-        crate::exact::Goal::EarnWhileLevelingUp(level_up, _) | crate::exact::Goal::StockUp(level_up, ..) => Some(level_up),
+        crate::exact::Goal::EarnWhileLevelingUp(level_up, _)
+        | crate::exact::Goal::StockUp(level_up, ..)
+        | crate::exact::Goal::StockUpOther(level_up, ..) => Some(level_up),
         _ => None,
     };
     let Some(exact) = crate::exact::plan_from_values_with_mode(

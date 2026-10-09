@@ -159,6 +159,9 @@ pub enum Goal<'a> {
     /// (each as a share of its cost): spare Bench and Kiln time processes whatever the level-up
     /// doesn't need yet, instead of leaving it raw.
     StockUp(&'a LevelUp, f64, f64),
+    /// Keeps the primary finite goal at `pace`, then maximizes a different set of level-up
+    /// materials. Used after daily orders, where the spare plan should prepare the next RV.
+    StockUpOther(&'a LevelUp, f64, &'a LevelUp),
 }
 
 /// What an RV level-up costs and what's already in stock, as `(item, amount)` with `"coins"` for
@@ -329,7 +332,10 @@ fn build_model<'a>(
     dedicated_level_up_facilities: bool,
 ) -> Model<'a> {
     let share_all_processors = match goal {
-        Goal::LevelUp(level_up) | Goal::EarnWhileLevelingUp(level_up, _) | Goal::StockUp(level_up, ..) => level_up.share_processors,
+        Goal::LevelUp(level_up)
+        | Goal::EarnWhileLevelingUp(level_up, _)
+        | Goal::StockUp(level_up, ..)
+        | Goal::StockUpOther(level_up, ..) => level_up.share_processors,
         _ => false,
     };
     let all: HashMap<&str, &ProductionItem> = items.iter().map(|i| (i.name.as_str(), i)).collect();
@@ -424,7 +430,9 @@ fn build_model<'a>(
         Goal::LevelUp(level_up) => Some((level_up, 0.0)),
         // Slack of 0.01% (about 9 seconds a day): `pace` is another solve's maximum, and the pace
         // terms are small enough that a tighter floor sits inside the solver's tolerances.
-        Goal::EarnWhileLevelingUp(level_up, pace) | Goal::StockUp(level_up, pace, _) => Some((level_up, pace * (1.0 - 1e-4))),
+        Goal::EarnWhileLevelingUp(level_up, pace)
+        | Goal::StockUp(level_up, pace, _)
+        | Goal::StockUpOther(level_up, pace, _) => Some((level_up, pace * (1.0 - 1e-4))),
         _ => None,
     };
     if let Some((level_up, min_pace)) = level_up {
@@ -465,6 +473,15 @@ fn build_model<'a>(
                 for (name, need) in &level_up.cost {
                     if let Some(terms) = balance.get_mut(name.as_str()).filter(|_| *need > 0.0) {
                         // Per day, as a share of the cost: comparable across costs.
+                        let extra = model.add(PACE_UNIT / need, (0.0, f64::INFINITY), false, VarKind::Extra);
+                        terms.push((extra, -1.0));
+                    }
+                }
+            }
+            Goal::StockUpOther(_, _, stock_up) => {
+                model.objective.iter_mut().for_each(|c| *c = 0.0);
+                for (name, need) in &stock_up.cost {
+                    if let Some(terms) = balance.get_mut(name.as_str()).filter(|_| *need > 0.0) {
                         let extra = model.add(PACE_UNIT / need, (0.0, f64::INFINITY), false, VarKind::Extra);
                         terms.push((extra, -1.0));
                     }
@@ -659,7 +676,7 @@ fn build_model<'a>(
                 model.objective[v] += amount;
             }
         }
-        Goal::LevelUp(_) | Goal::EarnWhileLevelingUp(..) | Goal::StockUp(..) => {}
+        Goal::LevelUp(_) | Goal::EarnWhileLevelingUp(..) | Goal::StockUp(..) | Goal::StockUpOther(..) => {}
     }
     // With the player's own Aniimo (see `Crew`), each member's day covers everything it works:
     // a recipe's time per batch at its rate, or at a facility it lives in, the whole day per unit.

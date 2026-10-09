@@ -357,6 +357,43 @@ fn exact_daily_orders_share_one_processor() {
     assert!(busy <= 1.0 + 1e-6, "shared Pot busy {busy}");
 }
 
+#[test]
+fn exact_daily_orders_use_spare_capacity_for_next_level_materials() {
+    let Some(items) = load_items() else { return };
+    let counts = FacilityCounts::only(&[
+        ("Farmland", 6, 2),
+        ("Woodland", 3, 2),
+        ("Jukebox Dryer", 1, 2),
+        ("Woodworking Bench", 1, 2),
+    ]);
+    let mut orders = level_up(&[("potato_chips", 2.0)], &[]);
+    orders.share_processors = true;
+    let fastest = solve_exact_with_mode(
+        &items,
+        "coins",
+        &counts,
+        &ModuleLevels::default(),
+        Goal::LevelUp(&orders),
+        None,
+        None,
+        false,
+    )
+    .expect("daily order pace");
+    let materials = level_up(&[("standard_planks", 1.0)], &[]);
+    let stocked = solve_exact_with_mode(
+        &items,
+        "coins",
+        &counts,
+        &ModuleLevels::default(),
+        Goal::StockUpOther(&orders, fastest.objective, &materials),
+        None,
+        None,
+        false,
+    )
+    .expect("daily orders with material stock-up");
+    assert!(net_rates(&stocked, &items).get("standard_planks").copied().unwrap_or(0.0) > 0.0, "{stocked:?}");
+}
+
 // Mineral Sand is plentiful here while Wood Blocks set the pace, so the Kiln turns the spare sand
 // into Coarse-Sifted Ore and the ore is ready before the Rough Lumber.
 #[test]

@@ -1944,13 +1944,16 @@ let progress = null;
 
 function startProgress(input, runId) {
     const levelUp = !!input.level_up && planContext.levelUp && !planContext.ready && !planContext.unavailable;
+    const levelMaterials = !!input.level_up && !planContext.levelUp;
     const priorities = input.priorities || [];
     // A level-up's solves (the soonest level-up, the most Home Coins at that pace, spare Bench
     // and Kiln time) are one step, and every plan's last is its final solve and the re-check
     // of it against every limit: the worker's steps map onto these (see `setStep`).
     const steps = [
         ...priorities.map(target => ({ key: `priority:${target}`, label: `Most ${priorityLabel(target, planContext.aniipod)}` })),
-        { key: 'plan', label: levelUp ? (planContext.dailyOrders ? 'Fastest Daily Orders' : 'Fastest Level-Up') : priorities.length ? "Home Coins with What's Left" : 'Most Home Coins' },
+        { key: 'plan', label: levelUp
+            ? (planContext.dailyOrders ? 'Fastest Daily Orders, then Level-Up Materials' : 'Fastest Level-Up, then More Materials')
+            : levelMaterials ? 'Most Next-RV Materials' : priorities.length ? "Home Coins with What's Left" : 'Most Home Coins' },
         { key: 'layout', label: 'Homeland Layout' },
         { key: 'improve', label: 'Opportunities' },
         { key: 'minimum', label: 'Minimum Team Plan' },
@@ -2553,6 +2556,7 @@ function shownPriorities() {
 
 // The ticked priorities, best first; none for the level-up strategy.
 function activePriorities() {
+    if (isCoinStrategy()) return ['coins'];
     if (isEventStrategy()) return ['season_points'];
     return isPriorityStrategy() ? shownPriorities().filter(p => p.on).map(p => p.target) : [];
 }
@@ -2954,12 +2958,28 @@ function levelUpInput() {
         const goal = dailyOrderGoal();
         return goal.cost.length ? goal : null;
     }
-    if (!isLevelUpStrategy() || levelUpUnavailable()) return null;
+    if (levelUpUnavailable()) return null;
     const cost = levelUpCost();
+    if (!isLevelUpStrategy()) return levelUpMaterialInput();
     return {
         cost: [['coins', cost.coins], ...cost.items],
         stock: stockNames(cost).filter(name => stockAmount(name) > 0).map(name => [name, stockAmount(name)]),
     };
+}
+
+// The next RV's Woodworking Bench and Chimney Kiln materials, without its coin cost. Every mode
+// uses this before falling back to spare Home Coins.
+function levelUpMaterialInput() {
+    if (levelUpUnavailable()) return null;
+    const cost = levelUpCost();
+    return {
+        cost: cost.items,
+        stock: stockNames(cost).filter(name => name !== 'coins' && stockAmount(name) > 0).map(name => [name, stockAmount(name)]),
+    };
+}
+
+function secondaryLevelUpInput() {
+    return isDailyOrdersStrategy() || isLevelUpStrategy() ? levelUpMaterialInput() : null;
 }
 
 // A per-second rate as a per-hour figure, with a decimal when it's small.
@@ -3130,6 +3150,10 @@ function renderProfitBreakdown(plan) {
     const card = document.getElementById('profit-card');
     const report = plan.level_up;
     const streams = (plan.income_streams || []).filter(s => s.units_per_second > 0);
+    if (!planContext?.levelUp) {
+        card.style.display = 'none';
+        return;
+    }
     if (!report || streams.length === 0) {
         card.style.display = 'none';
         return;
@@ -3172,6 +3196,7 @@ function getPlanInputValues() {
             priorities: activePriorities(),
             prioritize_byproducts: false,
             level_up: levelUpInput(),
+            secondary_level_up: secondaryLevelUpInput(),
             exclude: excludedRecipes(),
             season: seasonActive(),
             food_energy_per_second: foodEnergy,
@@ -3201,6 +3226,7 @@ function getPlanInputValues() {
         priorities: activePriorities(),
         prioritize_byproducts: false,
         level_up: levelUpInput(),
+        secondary_level_up: secondaryLevelUpInput(),
         exclude: excludedRecipes(),
         season: seasonActive(),
         food_energy_per_second: foodEnergy,
@@ -4331,7 +4357,7 @@ function displayPlan(plan) {
     resultsContent.style.display = 'block';
     resultsContent.classList.remove('setup-only');
     // A level-up plan's own card says how long it takes; the goal is for coin plans.
-    goalSection.style.display = plan.level_up ? 'none' : 'block';
+    goalSection.style.display = planContext?.levelUp ? 'none' : 'block';
 
     updateRateDisplay(!rateUnitChosen);
     renderGoalTargets(plan);
