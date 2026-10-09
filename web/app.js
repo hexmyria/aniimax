@@ -8,6 +8,7 @@ import {
 } from './facility-config.js?v=power-size1';
 import { createShareUrl, readShareHash, urlWithoutShare } from './share-config.js';
 import { sharedFacilityUtilization, sharedPhysicalCount, theoreticalUtilization } from './utilization.js?v=2';
+import { wholeFloor } from './numbers.js?v=1';
 import { routePowerGrid } from './power-layout.js?v=full-coverage1';
 
 let wasmReady = false;
@@ -3056,8 +3057,8 @@ function renderLevelUp(plan) {
     // What's left over once everything is ready and paid for: costs that finish early keep coming
     // in while the slowest one finishes.
     const surplus = report.requirements
-        .map(r => ({ name: r.name, spare: Math.floor(r.have + r.per_second * report.seconds - r.need) }))
-        .concat((report.leftovers || []).map(([name, amount]) => ({ name, spare: Math.floor(amount) })))
+        .map(r => ({ name: r.name, spare: wholeFloor(r.have + r.per_second * report.seconds - r.need) }))
+        .concat((report.leftovers || []).map(([name, amount]) => ({ name, spare: wholeFloor(amount) })))
         .filter(r => r.spare >= 1)
         .map(r => `${formatNumber(r.spare)} ${r.name === 'coins' ? 'Home Coins' : ITEM_NAMES[r.name] || prettyItem(r.name)}`);
     const coinsNote = surplus.length
@@ -3143,7 +3144,7 @@ function renderProfitBreakdown(plan) {
             <td data-label="Sold per hour">${perHour(s.units_per_second)}</td>
             <td data-label="Profit per hour">${formatNumber(Math.round(s.rate_per_second * 3600))}</td>
             <td data-label="Share">${total > 0 ? Math.round(s.rate_per_second / total * 100) : 0}%</td>
-            <td data-label="${planContext?.dailyOrders ? 'Profit before orders are ready' : `Profit until RV ${planContext?.target}`}">${formatNumber(Math.floor(s.rate_per_second * report.seconds))}</td>
+            <td data-label="${planContext?.dailyOrders ? 'Profit before orders are ready' : `Profit until RV ${planContext?.target}`}">${formatNumber(wholeFloor(s.rate_per_second * report.seconds))}</td>
         </tr>`).join('');
     document.getElementById('profit-breakdown').innerHTML = `
         <div class="table-wrapper">
@@ -3293,7 +3294,7 @@ function renderProductBreakdown(goalResult) {
     const tbody = document.getElementById('product-breakdown-tbody');
 
     const products = goalResult.products || [];
-    const byproducts = (goalResult.byproducts || []).filter(([, amount]) => Math.floor(amount) > 0);
+    const byproducts = (goalResult.byproducts || []).filter(([, amount]) => wholeFloor(amount) > 0);
     if (products.length === 0 && byproducts.length === 0) {
         section.style.display = 'none';
         return;
@@ -3320,7 +3321,7 @@ function renderProductBreakdown(goalResult) {
         // the two columns always reconcile by hand-multiplication; Profit stays net of
         // ingredient costs (matches Total Time/Amount Produced above), so it won't equal Worth
         // / time; they're intentionally different figures (gross vs. net).
-        const wholeAmount = Math.floor(p.total_units);
+        const wholeAmount = wholeFloor(p.total_units);
         const worth = wholeAmount * p.sell_value;
         row.innerHTML = `
             <td>${prettyItem(p.item_name)}</td>
@@ -3339,7 +3340,7 @@ function renderProductBreakdown(goalResult) {
         row.innerHTML = `
             <td>${name} <span class="hint small">(bonus)</span></td>
             <td>&mdash;</td>
-            <td>${Math.floor(amount).toLocaleString()}</td>
+            <td>${wholeFloor(amount).toLocaleString()}</td>
             <td>&mdash;</td>
             <td>not sold</td>
             ${pointsCell(0)}
@@ -4626,7 +4627,7 @@ function renderGoalAlso(rows, chosen, seconds, result) {
     const made = r => r.target === 'coins' && result?.success ? result.amount_produced : madeBy(r, seconds);
     const also = seconds > 0
         ? rows.filter(r => r !== chosen && r.perSecond > 1e-12)
-            .map(r => `${formatNumber(Math.floor(made(r)))} ${goalName(r)}`)
+            .map(r => `${formatNumber(wholeFloor(made(r)))} ${goalName(r)}`)
         : [];
     el.style.display = also.length ? 'block' : 'none';
     el.innerHTML = also.length ? `<span>By then you'll also have:</span> <strong>${also.join(', ')}</strong>` : '';
