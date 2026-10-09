@@ -1799,7 +1799,7 @@ details.explain p {
 
 .daily-order-row {
     display: grid;
-    grid-template-columns: 2rem minmax(12rem, 1fr) minmax(5rem, 0.35fr) minmax(5rem, 0.35fr) auto;
+    grid-template-columns: 2rem minmax(12rem, 1fr) auto minmax(5rem, 0.35fr) auto;
     gap: 0.55rem;
     align-items: end;
 }
@@ -1816,6 +1816,31 @@ details.explain p {
 
 .daily-order-row input {
     padding: 0.45rem;
+}
+
+.daily-order-amounts {
+    display: flex;
+    gap: 0.2rem;
+}
+
+.daily-order-amounts button {
+    min-width: 2.2rem;
+    padding: 0.45rem 0.55rem;
+    border: 1px solid var(--border);
+    border-radius: 0.35rem;
+    background: var(--surface);
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.daily-order-amounts button.selected {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+    color: var(--text);
+}
+
+.daily-order-amounts input {
+    width: 4.5rem;
 }
 
 .daily-order-actions {
