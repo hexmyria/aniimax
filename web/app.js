@@ -366,7 +366,7 @@ let rateUnitChosen = false;
 function getPersistedFieldIds() {
     return [
         'target-amount', 'current-amount',
-        'strategy-level-up', 'strategy-priorities', 'level-up-target',
+        'strategy-level-up', 'strategy-priorities', 'strategy-daily-orders', 'level-up-target',
         'mode-simple', 'mode-advanced', 'home-level',
         'ecological-module-level', 'kitchen-module-level',
         'resource-detector-level', 'crafting-module-level',
@@ -430,7 +430,7 @@ function initFacilityTiers(data) {
 }
 
 function currentConfig() {
-    const data = { facilityTiers, poweredFacilities: [...poweredFacilities], levelUpStock, skippedRecipes: [...skippedRecipes], unlockedSpecial: [...unlockedSpecial], priorities: priorityOrder, aniimoLevels, roster };
+    const data = { facilityTiers, poweredFacilities: [...poweredFacilities], levelUpStock, dailyOrders, dailyOrderSlots, skippedRecipes: [...skippedRecipes], unlockedSpecial: [...unlockedSpecial], priorities: priorityOrder, aniimoLevels, roster };
     getPersistedFieldIds().forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
@@ -600,6 +600,12 @@ async function shareCurrentConfig() {
 function loadInputsFromStorage(data) {
     if (!data) return;
     if (data.levelUpStock && typeof data.levelUpStock === 'object') levelUpStock = { ...data.levelUpStock };
+    if (Array.isArray(data.dailyOrders)) dailyOrders = data.dailyOrders.slice(0, DAILY_ORDER_MAX).map(order => ({
+        item: typeof order?.item === 'string' ? order.item : '',
+        need: Math.max(0, Number(order?.need) || 0),
+        have: Math.max(0, Number(order?.have) || 0),
+    }));
+    if (Number.isInteger(data.dailyOrderSlots)) dailyOrderSlots = Math.max(0, Math.min(DAILY_ORDER_MAX, data.dailyOrderSlots));
     if (Array.isArray(data.skippedRecipes)) skippedRecipes = new Set(data.skippedRecipes.filter(n => typeof n === 'string'));
     if (Array.isArray(data.unlockedSpecial)) unlockedSpecial = new Set(data.unlockedSpecial.filter(n => typeof n === 'string'));
     if (Array.isArray(data.priorities)) {
@@ -1078,8 +1084,8 @@ function improvementGain(result) {
             return {
                 score: 1 + (before ? (before - after) / before : 1),
                 text: before
-                    ? `${about}−${formatDuration(before - after)} level-up (${formatDuration(after)})`
-                    : `Level-up in ${about}${formatDuration(after)}`,
+                    ? `${about}−${formatDuration(before - after)} ${planContext?.dailyOrders ? 'order completion' : 'level-up'} (${formatDuration(after)})`
+                    : `${planContext?.dailyOrders ? 'Orders ready' : 'Level-up'} in ${about}${formatDuration(after)}`,
             };
         }
         const label = ranking.measure === 'coins' ? 'Home Coins' : priorityLabel(ranking.measure, planContext?.aniipod);
@@ -1117,7 +1123,7 @@ function renderImprovements() {
     const checked = ranking.results.filter(Boolean).length;
     const total = ranking.candidates.length;
     const within = ranking.homeLevel ? ` Within RV ${ranking.homeLevel} limits.` : '';
-    const by = ranking.measure === 'level_up' ? 'level-up time, then Home Coins'
+    const by = ranking.measure === 'level_up' ? `${planContext?.dailyOrders ? 'order completion' : 'level-up'} time, then Home Coins`
         : ranking.measure === 'coins' ? 'Home Coins' : `${priorityLabel(ranking.measure, planContext?.aniipod)}, then Home Coins`;
     // One row per change, or per group: the least of it that gets the most it can (see
     // `improvementCandidates`).
@@ -1939,7 +1945,7 @@ function startProgress(input, runId) {
     // of it against every limit: the worker's steps map onto these (see `setStep`).
     const steps = [
         ...priorities.map(target => ({ key: `priority:${target}`, label: `Most ${priorityLabel(target, planContext.aniipod)}` })),
-        { key: 'plan', label: levelUp ? 'Fastest Level-Up' : priorities.length ? "Home Coins with What's Left" : 'Most Home Coins' },
+        { key: 'plan', label: levelUp ? (planContext.dailyOrders ? 'Fastest Daily Orders' : 'Fastest Level-Up') : priorities.length ? "Home Coins with What's Left" : 'Most Home Coins' },
         { key: 'layout', label: 'Homeland Layout' },
         { key: 'improve', label: 'Opportunities' },
         { key: 'minimum', label: 'Minimum Team Plan' },
@@ -2294,10 +2300,11 @@ function recipeLabel(recipe) {
 async function loadRecipeIndex() {
     try {
         recipeIndex = JSON.parse(await callWorker('get_all_items'))
-            .map(r => ({ name: r.name, facility: r.facility, facilityLevel: r.facility_level, cost: r.cost || 0, seasonSeedCost: r.season_seed_cost || 0, environment: r.environment || null, jobs: r.jobs || [], ingredients: r.raw_materials || [], amounts: r.required_amount || [], yieldAmount: r.yield_amount || 1, byproduct: r.byproduct_item || null, byproductAmount: r.byproduct?.[1] || 0, turns: r.sell_currency === 'none' }))
+            .map(r => ({ name: r.name, facility: r.facility, facilityLevel: r.facility_level, cost: r.cost || 0, seasonSeedCost: r.season_seed_cost || 0, environment: r.environment || null, jobs: r.jobs || [], ingredients: r.raw_materials || [], amounts: r.required_amount || [], yieldAmount: r.yield_amount || 1, byproduct: r.byproduct_item || null, byproductAmount: r.byproduct?.[1] || 0, sellCurrency: r.sell_currency, turns: r.sell_currency === 'none' }))
             .sort((a, b) => a.facility.localeCompare(b.facility) || a.name.localeCompare(b.name));
         document.getElementById('skip-options').innerHTML =
             recipeIndex.map(r => `<option value="${recipeLabel(r)}"></option>`).join('');
+        renderDailyOrders();
         renderSkippedRecipes();
         // A plan can finish before this reference list on a very fast click. Refresh its display
         // so the Materials Processing minimum-level column never stays at the loading fallback.
@@ -2389,10 +2396,15 @@ function attachSkipHandlers() {
 // --- Strategy ----------------------------------------------------------------------------
 // "Level up" plans the soonest next RV level-up (its coins plus Wood Blocks and Mineral Sand, or
 // from RV 7 a Woodworking Bench item and a Chimney Kiln item, less what's already in stock);
-// "Priorities" makes as much of each ticked priority as the ones above it allow.
+// "Priorities" makes as much of each ticked priority as the ones above it allow; "Daily orders"
+// reserves finite requested amounts, allowing processors to switch recipes until all are ready.
 
 // What the player has toward a level-up, by item name ('coins' for coins).
 let levelUpStock = {};
+const DAILY_ORDER_MAX = 20;
+const DAILY_ORDER_CAPS = [5, 6, 6, 7, 7, 9, 9, 9, 11, 11, 11, 13, 13, 13, 15, 15, 15, 17, 17, 17];
+let dailyOrders = [];
+let dailyOrderSlots = 0;
 
 // The highest ability level an Aniimo reaches, and the abilities that stop short of it; mirrors
 // `MAX_ANIIMO_LEVEL` and `ABILITY_DEFAULTS` in models.rs.
@@ -2486,6 +2498,10 @@ const ITEM_NAMES = {
 
 function isLevelUpStrategy() {
     return document.getElementById('strategy-level-up').checked;
+}
+
+function isDailyOrdersStrategy() {
+    return document.getElementById('strategy-daily-orders').checked;
 }
 
 // --- Priorities ------------------------------------------------------------------------
@@ -2661,11 +2677,127 @@ function populateLevelUpTargets() {
     select.innerHTML = Object.keys(LEVEL_UP_COSTS).map(level => `<option value="${level}">${level}</option>`).join('');
 }
 
+function dailyOrderRvLevel() {
+    return isSimpleMode()
+        ? selectedHomeLevel()
+        : Math.max(1, Math.min(MAX_HOME_LEVEL, numberOrDefault(document.getElementById('fill-level').value, MAX_HOME_LEVEL)));
+}
+
+function dailyOrderNormalCap() {
+    return DAILY_ORDER_CAPS[dailyOrderRvLevel() - 1] || DAILY_ORDER_CAPS.at(-1);
+}
+
+function dailyOrderItemOptions(selected = '') {
+    const seen = new Set();
+    const recipes = recipeIndex.filter(recipe => {
+        if (recipe.sellCurrency === 'none' || recipe.name.startsWith('quick_') || recipe.name.endsWith('__uncovered')) return false;
+        if (seen.has(recipe.name)) return false;
+        seen.add(recipe.name);
+        return true;
+    });
+    if (selected && !seen.has(selected)) recipes.push({ name: selected, facility: '' });
+    return `<option value="">Select an item</option>${recipes
+        .sort((a, b) => prettyItem(a.name).localeCompare(prettyItem(b.name)))
+        .map(recipe => `<option value="${recipe.name}"${recipe.name === selected ? ' selected' : ''}>${prettyItem(recipe.name)}${recipe.facility ? ` — ${recipe.facility}` : ''}</option>`)
+        .join('')}`;
+}
+
+function renderDailyOrders() {
+    const list = document.getElementById('daily-order-list');
+    if (!list) return;
+    const cap = dailyOrderNormalCap();
+    const lastFilled = dailyOrders.reduce((last, order, i) => order?.item || order?.need || order?.have ? i + 1 : last, 0);
+    dailyOrderSlots = Math.min(DAILY_ORDER_MAX, Math.max(cap, dailyOrderSlots, lastFilled));
+    while (dailyOrders.length < dailyOrderSlots) dailyOrders.push({ item: '', need: 0, have: 0 });
+    document.getElementById('daily-order-cap').textContent = `RV ${dailyOrderRvLevel()} normally holds ${cap} orders. You can add up to ${DAILY_ORDER_MAX} slots.`;
+    document.getElementById('daily-order-add').disabled = dailyOrderSlots >= DAILY_ORDER_MAX;
+    list.innerHTML = dailyOrders.slice(0, dailyOrderSlots).map((order, index) => `
+        <div class="daily-order-row" data-order-index="${index}">
+            <span class="daily-order-number">${index + 1}</span>
+            <div class="input-field"><label>Order item</label><select data-order-field="item">${dailyOrderItemOptions(order.item)}</select></div>
+            <div class="input-field"><label>Required</label><input type="number" min="0" step="1" value="${order.need || ''}" data-order-field="need"></div>
+            <div class="input-field daily-order-have"><label>In stock</label><input type="number" min="0" step="1" value="${order.have || ''}" data-order-field="have"></div>
+            <span class="daily-order-actions">
+                <button type="button" class="tier-remove-btn" data-order-move="${index}" data-order-by="-1" aria-label="Move order ${index + 1} up"${index === 0 ? ' disabled' : ''}>↑</button>
+                <button type="button" class="tier-remove-btn" data-order-move="${index}" data-order-by="1" aria-label="Move order ${index + 1} down"${index + 1 >= dailyOrderSlots ? ' disabled' : ''}>↓</button>
+                <button type="button" class="tier-remove-btn" data-order-remove="${index}" aria-label="Clear order ${index + 1}">×</button>
+            </span>
+        </div>`).join('');
+}
+
+function dailyOrderGoal() {
+    const required = new Map();
+    const stock = new Map();
+    dailyOrders.slice(0, dailyOrderSlots).forEach(order => {
+        if (!order.item || order.need <= 0) return;
+        required.set(order.item, (required.get(order.item) || 0) + order.need);
+        stock.set(order.item, (stock.get(order.item) || 0) + Math.min(order.have, order.need));
+    });
+    return {
+        cost: [...required],
+        stock: [...stock].filter(([, amount]) => amount > 0),
+        share_processors: true,
+    };
+}
+
+function attachDailyOrderHandlers() {
+    const list = document.getElementById('daily-order-list');
+    list.addEventListener('input', e => {
+        const row = e.target.closest('[data-order-index]');
+        const field = e.target.dataset.orderField;
+        if (!row || !field) return;
+        const index = Number(row.dataset.orderIndex);
+        dailyOrders[index] ||= { item: '', need: 0, have: 0 };
+        dailyOrders[index][field] = field === 'item' ? e.target.value : Math.max(0, numberOrDefault(e.target.value, 0));
+        saveInputsToStorage();
+    });
+    list.addEventListener('change', e => {
+        if (e.target.dataset.orderField === 'item') {
+            const row = e.target.closest('[data-order-index]');
+            dailyOrders[Number(row.dataset.orderIndex)].item = e.target.value;
+            saveInputsToStorage();
+        }
+    });
+    list.addEventListener('click', e => {
+        const move = e.target.closest('[data-order-move]');
+        if (move) {
+            const from = Number(move.dataset.orderMove);
+            const to = from + Number(move.dataset.orderBy);
+            if (to >= 0 && to < dailyOrderSlots) {
+                [dailyOrders[from], dailyOrders[to]] = [dailyOrders[to], dailyOrders[from]];
+                renderDailyOrders();
+                saveInputsToStorage();
+            }
+            return;
+        }
+        const button = e.target.closest('[data-order-remove]');
+        if (!button) return;
+        const index = Number(button.dataset.orderRemove);
+        dailyOrders[index] = { item: '', need: 0, have: 0 };
+        const cap = dailyOrderNormalCap();
+        while (dailyOrderSlots > cap && !dailyOrders[dailyOrderSlots - 1]?.item && !dailyOrders[dailyOrderSlots - 1]?.need && !dailyOrders[dailyOrderSlots - 1]?.have) dailyOrderSlots--;
+        renderDailyOrders();
+        saveInputsToStorage();
+    });
+    document.getElementById('daily-order-add').addEventListener('click', () => {
+        if (dailyOrderSlots >= DAILY_ORDER_MAX) return;
+        dailyOrderSlots++;
+        renderDailyOrders();
+        saveInputsToStorage();
+    });
+}
+
 function renderStrategy() {
     renderSeason();
     const levelUp = isLevelUpStrategy();
+    const daily = isDailyOrdersStrategy();
     document.getElementById('level-up-config').style.display = levelUp ? 'block' : 'none';
-    document.getElementById('priorities-config').style.display = levelUp ? 'none' : 'block';
+    document.getElementById('daily-orders-config').hidden = !daily;
+    document.getElementById('priorities-config').style.display = levelUp || daily ? 'none' : 'block';
+    if (daily) {
+        renderDailyOrders();
+        return;
+    }
     if (!levelUp) {
         renderPriorities();
         return;
@@ -2698,6 +2830,7 @@ function renderStrategy() {
 function attachStrategyHandlers() {
     document.getElementById('strategy-level-up').addEventListener('change', renderStrategy);
     document.getElementById('strategy-priorities').addEventListener('change', renderStrategy);
+    document.getElementById('strategy-daily-orders').addEventListener('change', renderStrategy);
     const foodToggle = document.getElementById('food-self-sufficient');
     const foodCount = document.getElementById('food-aniimo-count');
     const showFoodCount = () => { document.getElementById('food-count-field').hidden = !foodToggle.checked; };
@@ -2722,6 +2855,10 @@ function attachStrategyHandlers() {
 
 // The level-up the solver should plan for (see `JsPlanInput::level_up` in wasm.rs), or null.
 function levelUpInput() {
+    if (isDailyOrdersStrategy()) {
+        const goal = dailyOrderGoal();
+        return goal.cost.length ? goal : null;
+    }
     if (!isLevelUpStrategy() || levelUpUnavailable()) return null;
     const cost = levelUpCost();
     return {
@@ -2769,7 +2906,7 @@ function renderLevelUp(plan) {
     const label = document.getElementById('level-up-label');
     const time = document.getElementById('level-up-time');
     const lines = document.getElementById('level-up-lines');
-    label.textContent = `RV ${context.target} level-up`;
+    label.textContent = context.dailyOrders ? 'Daily orders' : `RV ${context.target} level-up`;
     const report = plan.level_up;
     if (context.unavailable) {
         time.textContent = '-';
@@ -2778,13 +2915,13 @@ function renderLevelUp(plan) {
     }
     if (context.ready) {
         time.textContent = 'Ready now';
-        lines.innerHTML = `<p class="level-up-note">You already have everything it costs. This plan is for the most Home Coins.</p>`;
+        lines.innerHTML = `<p class="level-up-note">${context.dailyOrders ? 'Every order is already in stock.' : 'You already have everything it costs.'} This plan is for the most Home Coins.</p>`;
         return;
     }
     if (!report) {
         const why = plan.level_up_note === 'unreachable'
-            ? `These facilities can't make everything it costs.`
-            : `The level-up couldn't be planned.`;
+            ? `These facilities can't make everything ${context.dailyOrders ? 'the orders need' : 'it costs'}.`
+            : `${context.dailyOrders ? 'The daily orders' : 'The level-up'} couldn't be planned.`;
         time.textContent = '-';
         lines.innerHTML = `<p class="level-up-note">${why} This plan is for the most Home Coins.</p>`;
         return;
@@ -2792,12 +2929,30 @@ function renderLevelUp(plan) {
     time.textContent = `in ${formatDuration(report.seconds)}`;
     const { multiplier } = RATE_UNIT_SECONDS[select.value] || RATE_UNIT_SECONDS.second;
     const perUnit = perSecond => formatRate(perSecond * multiplier);
-    const slowest = Math.max(...report.requirements.map(r => r.seconds ?? Infinity));
-    const rows = report.requirements.map(r => {
+    const displayRequirements = context.dailyOrders ? (() => {
+        const aggregate = new Map(report.requirements.map(requirement => [requirement.name, requirement]));
+        const cumulative = new Map();
+        return dailyOrders.slice(0, dailyOrderSlots).filter(order => order.item && order.need > 0).map((order, index) => {
+            const requirement = aggregate.get(order.item);
+            const shortage = Math.max(0, order.need - order.have);
+            const total = (cumulative.get(order.item) || 0) + shortage;
+            cumulative.set(order.item, total);
+            return {
+                name: order.item,
+                label: `#${index + 1} ${ITEM_NAMES[order.item] || prettyItem(order.item)}`,
+                need: order.need,
+                have: Math.min(order.have, order.need),
+                per_second: requirement?.per_second || 0,
+                seconds: shortage === 0 ? 0 : requirement?.per_second > 0 ? total / requirement.per_second : null,
+            };
+        });
+    })() : report.requirements;
+    const slowest = Math.max(...displayRequirements.map(r => r.seconds ?? Infinity));
+    const rows = displayRequirements.map(r => {
         const ready = r.seconds === null ? 'never' : r.seconds === 0 ? 'have it' : formatDuration(r.seconds);
         const isSlowest = r.seconds !== null && r.seconds > 0 && r.seconds >= slowest * (1 - 1e-6);
         return `<tr${isSlowest ? ' class="slowest"' : ''}>
-            <td>${ITEM_NAMES[r.name] || prettyItem(r.name)}</td>
+            <td>${r.label || ITEM_NAMES[r.name] || prettyItem(r.name)}</td>
             <td>${formatNumber(r.need)}</td>
             <td>${formatNumber(r.have)}</td>
             <td>${perUnit(r.per_second)}</td>
@@ -2816,7 +2971,7 @@ function renderLevelUp(plan) {
         : '';
     lines.innerHTML = `
         <table class="level-up-lines">
-            <thead><tr><th>Cost</th><th>Need</th><th>Have</th><th id="level-up-rate-head"></th><th>Ready in</th></tr></thead>
+            <thead><tr><th>${context.dailyOrders ? 'Order item' : 'Cost'}</th><th>Need</th><th>Have</th><th id="level-up-rate-head"></th><th>Ready in</th></tr></thead>
             <tbody>${rows}</tbody>
         </table>
         ${coinsNote}`;
@@ -2858,7 +3013,7 @@ function renderSeedTable(plan) {
     ].filter(Boolean).join(' + ');
     card.style.display = 'block';
     const per = levelUp
-        ? `until RV ${planContext.target}`
+        ? (planContext.dailyOrders ? 'until all daily orders are ready' : `until RV ${planContext.target}`)
         : { second: 'per second', minute: 'per minute', hour: 'per hour', day: 'per day' }[unit] || 'per second';
     document.getElementById('seed-card-unit').textContent = `Seeds ${per}: one per planting, for every Farmland and Woodland crop in the plan.`;
     el.innerHTML = `
@@ -2894,12 +3049,12 @@ function renderProfitBreakdown(plan) {
             <td data-label="Sold per hour">${perHour(s.units_per_second)}</td>
             <td data-label="Profit per hour">${formatNumber(Math.round(s.rate_per_second * 3600))}</td>
             <td data-label="Share">${total > 0 ? Math.round(s.rate_per_second / total * 100) : 0}%</td>
-            <td data-label="Profit until RV ${planContext?.target}">${formatNumber(Math.floor(s.rate_per_second * report.seconds))}</td>
+            <td data-label="${planContext?.dailyOrders ? 'Profit before orders are ready' : `Profit until RV ${planContext?.target}`}">${formatNumber(Math.floor(s.rate_per_second * report.seconds))}</td>
         </tr>`).join('');
     document.getElementById('profit-breakdown').innerHTML = `
         <div class="table-wrapper">
             <table class="facility-plan-table">
-                <thead><tr><th>Product</th><th>Facility</th><th>Sold per hour</th><th>Profit per hour</th><th>Share</th><th>Profit until RV ${planContext?.target}</th></tr></thead>
+                <thead><tr><th>Product</th><th>Facility</th><th>Sold per hour</th><th>Profit per hour</th><th>Share</th><th>${planContext?.dailyOrders ? 'Profit before orders are ready' : `Profit until RV ${planContext?.target}`}</th></tr></thead>
                 <tbody>${rows}</tbody>
             </table>
         </div>`;
@@ -2925,7 +3080,7 @@ function getPlanInputValues() {
             exclude: excludedRecipes(),
             season: seasonActive(),
             food_energy_per_second: foodEnergy,
-            dedicated_level_up_facilities: true,
+            dedicated_level_up_facilities: !isDailyOrdersStrategy(),
             facilities,
             modules
         };
@@ -2954,7 +3109,7 @@ function getPlanInputValues() {
         exclude: excludedRecipes(),
         season: seasonActive(),
         food_energy_per_second: foodEnergy,
-        dedicated_level_up_facilities: true,
+        dedicated_level_up_facilities: !isDailyOrdersStrategy(),
         facilities,
         modules
     };
@@ -3248,6 +3403,9 @@ function planRows(rows, showMinimumLevel = false, sharedUtilization = new Map())
         const powerControl = electric
             ? `<label class="power-choice" title="Display this facility type on the Crackle power grid; production calculations are unchanged"><input type="checkbox" data-power-facility="${step.facility}" ${poweredFacilities.has(step.facility) ? 'checked' : ''} ${canPower ? '' : 'disabled'}><span>${canPower ? 'Use' : `RV ${POWER_GRID.unlockRv}+`}</span></label>`
             : '—';
+        const dailyTarget = planContext?.dailyOrders && dailyOrderGoal().cost.some(([name]) => name === step.item_name);
+        const sharing = dailyTarget && step.reason?.match(/; takes turns with .+$/)?.[0] || '';
+        const reason = dailyTarget ? `For a daily order${sharing}` : step.reason;
         return `
                     <tr class="status-${step.status}">
                         <td data-label="Facility">${step.facility}</td>
@@ -3257,7 +3415,7 @@ function planRows(rows, showMinimumLevel = false, sharedUtilization = new Map())
                         <td data-label="Aniimo">${aniimoLabel(step)}</td>
                         <td data-label="Theoretical utilization" class="utilization-cell">${utilizationText}</td>
                         <td data-label="E-mode">${powerControl}</td>
-                        <td data-label="Why">${prettyReason(step.reason)}</td>
+                        <td data-label="Why">${prettyReason(reason)}</td>
                     </tr>
                 `;
     }).join('');
@@ -4089,7 +4247,10 @@ function displayPlan(plan) {
     }
 
     const operationModeEl = document.getElementById('plan-operation-mode');
-    if (planContext?.levelUp && plan.dedicated_level_up_facilities) {
+    if (planContext?.dailyOrders) {
+        operationModeEl.textContent = 'Daily-order plan: shared facilities switch recipes only as needed; return them to the normal plan after every order is ready.';
+        operationModeEl.style.display = 'block';
+    } else if (planContext?.levelUp && plan.dedicated_level_up_facilities) {
         operationModeEl.textContent = 'Idle-friendly plan: each active level-up recipe has its own Woodworking Bench or Chimney Kiln and runs simultaneously.';
         operationModeEl.style.display = 'block';
     } else if (planContext?.levelUp && plan.facility_sharing_fallback) {
@@ -4186,11 +4347,14 @@ async function runFindPlan() {
     try {
         const input = getPlanInputValues();
         lastPlanInput = input;
+        const daily = isDailyOrdersStrategy();
+        const inputStock = new Map(input.level_up?.stock || []);
         planContext = {
-            levelUp: isLevelUpStrategy(),
-            target: levelUpTarget(),
-            unavailable: levelUpUnavailable(),
-            ready: !!(input.level_up && input.level_up.cost.every(([name, need]) => stockAmount(name) >= need)),
+            levelUp: isLevelUpStrategy() || daily,
+            dailyOrders: daily,
+            target: daily ? null : levelUpTarget(),
+            unavailable: daily ? (!input.level_up ? 'Enter at least one order with a required amount.' : null) : levelUpUnavailable(),
+            ready: !!(input.level_up && input.level_up.cost.every(([name, need]) => (inputStock.get(name) || 0) >= need)),
             aniipod: wantsAniipods() ? bestAniipod() : null,
             hasPolisher: (input.facilities['Dance Pad Polisher'] || []).some(t => t.count > 0),
             // Only what the player skipped; locked special recipes are the default, not news.
@@ -4554,6 +4718,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     attachFacilityTierHandlers();
     attachModeHandlers();
     attachStrategyHandlers();
+    attachDailyOrderHandlers();
     attachSkipHandlers();
     renderSkippedRecipes();
     attachSpecialHandlers();

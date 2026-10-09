@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aniimax - Aniimo Production Optimizer</title>
-    <link rel="stylesheet" href="style.css?v=rotate-blocks1">
+    <link rel="stylesheet" href="style.css?v=daily-orders1">
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
@@ -115,6 +115,7 @@
                     <div class="tabs" role="radiogroup" aria-label="Strategy">
                         <label><input type="radio" name="strategy" id="strategy-level-up" value="level-up" checked> Level up</label>
                         <label><input type="radio" name="strategy" id="strategy-priorities" value="priorities"> Priorities</label>
+                        <label><input type="radio" name="strategy" id="strategy-daily-orders" value="daily-orders"> Daily orders</label>
                     </div>
 
                     <div id="priorities-config" style="display: none;">
@@ -148,6 +149,14 @@
                             <p class="hint small">Counts toward the level-up. Wood Blocks, Mineral Sand and lower tiers get processed up.</p>
                             <div class="stock-grid" id="level-up-stock-grid"></div>
                         </details>
+                    </div>
+
+                    <div id="daily-orders-config" hidden>
+                        <p class="hint">Enter the orders currently on your board. The plan reserves every requested item, finishes all orders as soon as possible, then uses the remaining capacity for Home Coins.</p>
+                        <p class="hint small" id="daily-order-cap"></p>
+                        <datalist id="daily-order-options"></datalist>
+                        <div class="daily-order-list" id="daily-order-list"></div>
+                        <button type="button" class="add-tier-btn" id="daily-order-add">+ Add order slot</button>
                     </div>
                 </div>
 
@@ -566,7 +575,7 @@
             }
         });
     </script>
-    <script type="module" src="i18n.js?v=ja21"></script>
-    <script type="module" src="app.js?v=full-power-coverage1"></script>
+    <script type="module" src="i18n.js?v=daily-orders1"></script>
+    <script type="module" src="app.js?v=daily-orders1"></script>
 </body>
 </html>

@@ -172,7 +172,7 @@ fn exact_grows_crops_without_their_environment() {
 
 fn level_up(cost: &[(&str, f64)], stock: &[(&str, f64)]) -> LevelUp {
     let list = |l: &[(&str, f64)]| l.iter().map(|(n, a)| (n.to_string(), *a)).collect();
-    LevelUp { cost: list(cost), stock: list(stock) }
+    LevelUp { cost: list(cost), stock: list(stock), share_processors: false }
 }
 
 /// Solves a level-up in both stages and checks the plan: the soonest level-up, then the most
@@ -319,6 +319,42 @@ fn exact_level_up_dedicates_one_bench_per_active_recipe() {
         .sum();
     assert_eq!(used, 2);
     assert!(shown.coin_items.iter().all(|s| !s.reason.contains("takes turns")));
+}
+
+// Daily orders are finite jobs, so one processor may run each requested recipe in turn. The
+// shared mode used by the order UI must not require a separate Simmering Pot per order.
+#[test]
+fn exact_daily_orders_share_one_processor() {
+    let Some(items) = load_items() else { return };
+    let counts = FacilityCounts::only(&[
+        ("Farmland", 12, 5),
+        ("Woodland", 6, 3),
+        ("Simmering Pot", 1, 3),
+    ]);
+    let mut orders = level_up(&[("strawberry_jam", 5.0), ("maple_candy_apple_jam", 5.0)], &[]);
+    orders.share_processors = true;
+    let plan = solve_exact_with_mode(
+        &items,
+        "coins",
+        &counts,
+        &ModuleLevels::default(),
+        Goal::LevelUp(&orders),
+        None,
+        None,
+        false,
+    )
+    .expect("daily-order plan");
+    assert!(plan.objective > 0.0, "one Pot should switch between both orders: {plan:?}");
+    assert_eq!(plan.units.get("strawberry_jam"), Some(&1));
+    assert_eq!(plan.units.get("maple_candy_apple_jam"), Some(&1));
+    let shown = to_production_plan_with_mode(&plan, &items, "coins", &counts, false);
+    let busy: f64 = shown
+        .coin_items
+        .iter()
+        .filter(|step| step.facility == "Simmering Pot")
+        .filter_map(|step| step.busy_units)
+        .sum();
+    assert!(busy <= 1.0 + 1e-6, "shared Pot busy {busy}");
 }
 
 // Mineral Sand is plentiful here while Wood Blocks set the pace, so the Kiln turns the spare sand

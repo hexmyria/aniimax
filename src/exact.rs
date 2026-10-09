@@ -134,6 +134,8 @@ pub struct ExactPlan {
     pub pairs: Vec<ExactPair>,
     /// Level-ups per day, for a level-up goal (see [`PACE_UNIT`]).
     pub pace: Option<f64>,
+    /// Daily-order plans may switch any processing facility between requested recipes.
+    pub share_all_processors: bool,
     /// When planning with the player's roster, `(building, member, share of its day)` for each
     /// environment building kind a member staffs (see [`crate::models::Crew`]).
     pub staffing: Vec<(String, usize, f64)>,
@@ -168,6 +170,9 @@ pub struct LevelUp {
     pub cost: Vec<(String, f64)>,
     #[serde(default)]
     pub stock: Vec<(String, f64)>,
+    /// Used by finite daily orders, whose recipes may take turns on one processing facility.
+    #[serde(default)]
+    pub share_processors: bool,
 }
 
 impl LevelUp {
@@ -211,8 +216,8 @@ pub fn takes_turns(recipe: &ProductionItem) -> bool {
 /// Whether a level-up recipe may share a physical processor in this solve. In idle-friendly
 /// plans each active recipe gets whole units of its own, so the player can leave every tier
 /// running without changing recipes by hand.
-fn shares_facility(recipe: &ProductionItem, dedicated_level_up_facilities: bool) -> bool {
-    takes_turns(recipe) && !dedicated_level_up_facilities
+fn shares_facility(recipe: &ProductionItem, dedicated_level_up_facilities: bool, share_all_processors: bool) -> bool {
+    !dedicated_level_up_facilities && (takes_turns(recipe) || share_all_processors && recipe.raw_materials.is_some())
 }
 
 /// The item a recipe makes: a quick variant makes the regular item, and an uncovered crop (see
@@ -266,6 +271,7 @@ struct Model<'a> {
     /// `(variable, weight)` for the tie-break in the objective (see [`BUILDING_TIE_BREAK`]),
     /// so a solve's objective can be given back without it.
     tiebreak: Vec<(usize, f64)>,
+    share_all_processors: bool,
 }
 
 /// What each environment building a plan sets up costs in the objective: far too little to give
@@ -322,6 +328,10 @@ fn build_model<'a>(
     goal: Goal,
     dedicated_level_up_facilities: bool,
 ) -> Model<'a> {
+    let share_all_processors = match goal {
+        Goal::LevelUp(level_up) | Goal::EarnWhileLevelingUp(level_up, _) | Goal::StockUp(level_up, ..) => level_up.share_processors,
+        _ => false,
+    };
     let all: HashMap<&str, &ProductionItem> = items.iter().map(|i| (i.name.as_str(), i)).collect();
     let recipes: Vec<&ProductionItem> = items
         .iter()
@@ -341,6 +351,7 @@ fn build_model<'a>(
         kinds: Vec::new(),
         constraints: Vec::new(),
         tiebreak: Vec::new(),
+        share_all_processors,
     };
 
     // Seeds are paid in coins, so they only come off a coin total.
@@ -352,7 +363,7 @@ fn build_model<'a>(
     for &recipe in &recipes {
         let rate = model.add(-seed_cost(recipe), (0.0, f64::INFINITY), false, VarKind::Rate(recipe));
         let max = facility_counts.get_count(&recipe.facility) as f64;
-        let units = model.add(0.0, (0.0, max), !shares_facility(recipe, dedicated_level_up_facilities), VarKind::Units(recipe));
+        let units = model.add(0.0, (0.0, max), !shares_facility(recipe, dedicated_level_up_facilities, share_all_processors), VarKind::Units(recipe));
         model.constrain(vec![(rate, recipe.production_time), (units, -1.0)], ComparisonOp::Le, 0.0);
         rate_of.push((recipe, rate));
         units_of.push((recipe, units));
@@ -979,14 +990,14 @@ fn plan_from(model: &Model, value: f64, upper_bound: f64, proven_optimal: bool, 
     let mut pairs: Vec<ExactPair> = Vec::new();
     let mut pace = None;
     let mut staffing = Vec::new();
-    for (kind, &v) in model.kinds.iter().zip(values) {
+    for ((kind, &v), &integer) in model.kinds.iter().zip(values).zip(&model.integer) {
         match kind {
             VarKind::Pace => pace = Some(v),
             VarKind::Staff { building, member } if v > 1e-9 => staffing.push((building.clone(), *member, v)),
             VarKind::Rate(recipe) if v > 1e-9 => {
                 recipe_rates.insert(recipe.name.clone(), v);
             }
-            VarKind::Units(recipe) if takes_turns(recipe) && v > 1e-9 => {
+            VarKind::Units(recipe) if !integer && v > 1e-9 => {
                 // The units it runs on at least part of the time.
                 units.insert(recipe.name.clone(), ((v - 1e-6).ceil().max(1.0)) as u32);
             }
@@ -1050,6 +1061,7 @@ fn plan_from(model: &Model, value: f64, upper_bound: f64, proven_optimal: bool, 
         environment,
         pairs,
         pace,
+        share_all_processors: model.share_all_processors,
         staffing,
     }
 }
@@ -1099,7 +1111,7 @@ pub fn check_plan_with_mode(
         if rate * recipe.production_time > units as f64 + TOLERANCE {
             return Err(format!("{name} runs {rate}/s but has {units} units at {}s each", recipe.production_time));
         }
-        let in_use = if shares_facility(recipe, dedicated_level_up_facilities) {
+        let in_use = if shares_facility(recipe, dedicated_level_up_facilities, plan.share_all_processors) {
             rate * recipe.production_time
         } else {
             units as f64
@@ -1615,14 +1627,14 @@ pub fn to_production_plan_with_mode(
             continue;
         }
         // Recipes taking turns share units, so what's in use is their combined time.
-        let shared: Vec<&str> = rows.iter().filter(|(r, _, _)| shares_facility(r, dedicated_level_up_facilities)).map(|(r, _, _)| r.name.as_str()).collect();
-        let shared_time: f64 = rows.iter().filter(|(r, _, _)| shares_facility(r, dedicated_level_up_facilities)).map(|(r, _, rate)| rate * r.production_time).sum();
-        let used: u32 = rows.iter().filter(|(r, _, _)| !shares_facility(r, dedicated_level_up_facilities)).map(|(_, u, _)| u).sum::<u32>()
+        let shared: Vec<&str> = rows.iter().filter(|(r, _, _)| shares_facility(r, dedicated_level_up_facilities, exact.share_all_processors)).map(|(r, _, _)| r.name.as_str()).collect();
+        let shared_time: f64 = rows.iter().filter(|(r, _, _)| shares_facility(r, dedicated_level_up_facilities, exact.share_all_processors)).map(|(r, _, rate)| rate * r.production_time).sum();
+        let used: u32 = rows.iter().filter(|(r, _, _)| !shares_facility(r, dedicated_level_up_facilities, exact.share_all_processors)).map(|(_, u, _)| u).sum::<u32>()
             + ((shared_time - 1e-6).ceil().max(0.0) as u32);
         let used = used.min(owned);
         for (recipe, units, rate) in rows {
             let mut reason = uses_of(recipe);
-            if shares_facility(recipe, dedicated_level_up_facilities) {
+            if shares_facility(recipe, dedicated_level_up_facilities, exact.share_all_processors) {
                 let others: Vec<&str> = shared.iter().copied().filter(|n| *n != recipe.name).collect();
                 if !others.is_empty() {
                     reason = format!("{reason}; takes turns with {}", others.join(", "));
