@@ -157,9 +157,9 @@ async function exactPlanJson(pkg, payload, step = () => {}, first = () => {}) {
         }
     }
     step('final', 'done', solved.proven);
-    if (stage.pace && !input.secondary_level_up) {
-        // Keeping that pace and those coins, spare Bench and Kiln time goes to the level-up. If
-        // that solve fails, the plan above already has the pace and coins, so it stands.
+    if (stage.pace) {
+        // Keep the primary goal, material pace and maximum coins before using genuinely spare
+        // capacity for more level-up materials.
         const stockStage = { ...stage, coins: solved.objective };
         const stockJson = JSON.stringify(stockStage);
         step('stock_up', 'start');
