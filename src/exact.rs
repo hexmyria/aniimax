@@ -212,9 +212,9 @@ pub enum Goal<'a> {
     /// (each as a share of its cost): spare Bench and Kiln time processes whatever the level-up
     /// doesn't need yet, instead of leaving it raw.
     StockUp(&'a LevelUp, f64, f64),
-    /// Keeps the primary finite goal at `pace`, then maximizes a different set of level-up
-    /// materials. Used after daily orders, where the spare plan should prepare the next RV.
-    StockUpOther(&'a LevelUp, f64, &'a LevelUp),
+    /// Keeps the primary finite goal at `pace` and the coins already maximized at that pace, then
+    /// maximizes a different set of level-up materials.
+    StockUpOther(&'a LevelUp, f64, &'a LevelUp, f64),
 }
 
 /// What an RV level-up costs and what's already in stock, as `(item, amount)` with `"coins"` for
@@ -490,7 +490,7 @@ fn build_model<'a>(
         // terms are small enough that a tighter floor sits inside the solver's tolerances.
         Goal::EarnWhileLevelingUp(level_up, pace)
         | Goal::StockUp(level_up, pace, _)
-        | Goal::StockUpOther(level_up, pace, _) => Some((level_up, pace * (1.0 - 1e-4))),
+        | Goal::StockUpOther(level_up, pace, ..) => Some((level_up, pace * (1.0 - 1e-4))),
         _ => None,
     };
     if let Some((level_up, min_pace)) = level_up {
@@ -501,7 +501,7 @@ fn build_model<'a>(
         let mut earned = coin_terms.clone();
         earned.push((pace, per_pace(currency)));
         model.constrain(earned, ComparisonOp::Ge, 0.0);
-        if let Goal::StockUp(_, _, coins) = goal {
+        if let Goal::StockUp(_, _, coins) | Goal::StockUpOther(_, _, _, coins) = goal {
             // Slack of 0.1%: `coins` is another solve's maximum, and a tighter floor can leave no
             // whole-unit plan the independent re-check accepts (seen at RV 9 and 14).
             model.constrain(coin_terms, ComparisonOp::Ge, coins - 1e-3 * coins.abs());
@@ -536,7 +536,7 @@ fn build_model<'a>(
                     }
                 }
             }
-            Goal::StockUpOther(_, _, stock_up) => {
+            Goal::StockUpOther(_, _, stock_up, _) => {
                 model.objective.iter_mut().for_each(|c| *c = 0.0);
                 for (name, need) in &stock_up.cost {
                     if let Some(terms) = balance.get_mut(name.as_str()).filter(|_| *need > 0.0) {

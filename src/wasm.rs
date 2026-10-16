@@ -1453,8 +1453,10 @@ struct JsStage {
 
 impl JsStage {
     fn goal<'a>(&'a self, input: &'a JsPlanInput) -> crate::exact::Goal<'a> {
-        if let (Some(level_up), Some(pace), Some(stock_up)) = (&input.level_up, self.pace, &input.secondary_level_up) {
-            return crate::exact::Goal::StockUpOther(level_up, pace, stock_up);
+        if let (Some(level_up), Some(pace), Some(stock_up), Some(coins)) =
+            (&input.level_up, self.pace, &input.secondary_level_up, self.coins)
+        {
+            return crate::exact::Goal::StockUpOther(level_up, pace, stock_up, coins);
         }
         match (&input.level_up, self.pace, self.coins) {
             (Some(level_up), Some(pace), Some(coins)) => crate::exact::Goal::StockUp(level_up, pace, coins),

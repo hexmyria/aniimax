@@ -394,18 +394,30 @@ fn exact_daily_orders_use_spare_capacity_for_next_level_materials() {
         false,
     )
     .expect("daily order pace");
+    let earned = solve_exact_with_mode(
+        &items,
+        "coins",
+        &counts,
+        &ModuleLevels::default(),
+        Goal::EarnWhileLevelingUp(&orders, fastest.objective),
+        None,
+        None,
+        false,
+    )
+    .expect("maximum coins after daily orders");
     let materials = level_up(&[("standard_planks", 1.0)], &[]);
     let stocked = solve_exact_with_mode(
         &items,
         "coins",
         &counts,
         &ModuleLevels::default(),
-        Goal::StockUpOther(&orders, fastest.objective, &materials),
+        Goal::StockUpOther(&orders, fastest.objective, &materials, earned.rate_per_second),
         None,
         None,
         false,
     )
     .expect("daily orders with material stock-up");
+    assert!(stocked.rate_per_second >= earned.rate_per_second * (1.0 - 1e-3) - 1e-9);
     assert!(net_rates(&stocked, &items).get("standard_planks").copied().unwrap_or(0.0) > 0.0, "{stocked:?}");
 }
 
@@ -507,17 +519,28 @@ fn exact_level_materials_keep_maximum_season_points() {
     )
     .expect("materials while retaining points");
     assert!(fastest.objective > 0.0);
+    let earned = solve_exact(
+        &items,
+        "coins",
+        &counts,
+        &ModuleLevels::default(),
+        Goal::EarnWhileLevelingUp(&primary, fastest.objective),
+        None,
+        None,
+    )
+    .expect("maximum coins while retaining points and materials");
     let secondary = level_up(&[("sintered_ore_brick", 1.0)], &[]);
     let stocked = solve_exact(
         &items,
         "coins",
         &counts,
         &ModuleLevels::default(),
-        Goal::StockUpOther(&primary, fastest.objective, &secondary),
+        Goal::StockUpOther(&primary, fastest.objective, &secondary, earned.rate_per_second),
         None,
         None,
     )
     .expect("secondary materials while retaining points");
+    assert!(stocked.rate_per_second >= earned.rate_per_second * (1.0 - 1e-3) - 1e-9);
     let retained = aniimax::exact::target_rate(&stocked, &items, aniimax::models::SEASON_POINTS);
     assert!(retained >= points * (1.0 - 2e-4), "retained {retained}, maximum {points}: {stocked:?}");
     assert!(net_rates(&stocked, &items).get("sintered_ore_brick").copied().unwrap_or(0.0) > 0.0, "{stocked:?}");
