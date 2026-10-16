@@ -4418,17 +4418,26 @@ function displayPlan(plan) {
 function renderFoodPlan(plan) {
     const card = document.getElementById('food-card');
     const foods = plan.food_items || [];
-    if (!foods.length) {
+    const required = Math.max(0, plan.food_energy_required || 0);
+    if (required <= 0) {
         card.style.display = 'none';
         return;
     }
     const count = Math.max(1, Math.floor(numberOrDefault(document.getElementById('food-aniimo-count').value, 1)));
     const perDay = 86400;
-    const energy = foods.reduce((sum, row) => sum + row[2], 0);
-    document.getElementById('food-summary').textContent = `${count} Aniimo × 10 Energy/minute: ${formatNumber(energy * perDay)} Energy/day.`;
+    const supplied = Math.max(0, plan.food_energy_supplied || 0);
+    const shortage = Math.max(0, required - supplied);
+    const japanese = document.documentElement.lang === 'ja';
+    document.getElementById('food-summary').textContent = shortage > 1e-9
+        ? (japanese
+            ? `アニモ${count}体 × 毎分10 Energy：余剰食品で1日${formatNumber(supplied * perDay)} Energyを補い、不足する1日${formatNumber(shortage * perDay)} Energy分は購入します。`
+            : `${count} Aniimo × 10 Energy/minute: surplus covers ${formatNumber(supplied * perDay)} Energy/day; buy the remaining ${formatNumber(shortage * perDay)} Energy/day.`)
+        : (japanese
+            ? `アニモ${count}体 × 毎分10 Energy：必要な1日${formatNumber(required * perDay)} Energyを余剰食品ですべて補えます。`
+            : `${count} Aniimo × 10 Energy/minute: surplus covers all ${formatNumber(required * perDay)} Energy/day.`);
     document.getElementById('food-table').innerHTML = `<table>
         <thead><tr><th>Food</th><th>Amount/day</th><th>Energy/day</th></tr></thead>
-        <tbody>${foods.map(([name, rate, energyRate]) => `<tr><td>${prettyItem(name)}</td><td>${formatNumber(rate * perDay)}</td><td>${formatNumber(energyRate * perDay)}</td></tr>`).join('')}</tbody>
+        <tbody>${foods.length ? foods.map(([name, rate, energyRate]) => `<tr><td>${prettyItem(name)}</td><td>${formatNumber(rate * perDay)}</td><td>${formatNumber(energyRate * perDay)}</td></tr>`).join('') : '<tr><td colspan="3">No surplus food; buy all required food.</td></tr>'}</tbody>
     </table>`;
     card.style.display = 'block';
 }
