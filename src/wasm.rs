@@ -756,7 +756,8 @@ pub struct JsPlanInput {
     /// `"season_points"` (see [`crate::models::SEASON_POINTS`]).
     #[serde(default)]
     pub season: bool,
-    /// Energy/sec that must be diverted to the shared Homeland food reserve.
+    /// Desired Energy/sec to divert from food the finished plan would otherwise sell. This does
+    /// not constrain production; any shortfall is reported for the player to buy.
     #[serde(default)]
     pub food_energy_per_second: f64,
     /// Prefer one physical Woodworking Bench/Chimney Kiln per active level-up recipe, so all
@@ -1230,6 +1231,11 @@ pub struct JsProductionPlan {
     /// Food diverted from sale: `(item, units/sec, energy/sec)`.
     #[serde(default)]
     pub food_items: Vec<(String, f64, f64)>,
+    /// Requested and available surplus food Energy/sec, used to show a purchase shortfall.
+    #[serde(default)]
+    pub food_energy_required: f64,
+    #[serde(default)]
+    pub food_energy_supplied: f64,
 }
 
 /// What a plan makes of one priority.
@@ -1293,6 +1299,8 @@ fn empty_production_plan(success: bool, error: Option<String>) -> JsProductionPl
         season_points: None,
         staffing: Vec::new(),
         food_items: vec![],
+        food_energy_required: 0.0,
+        food_energy_supplied: 0.0,
     }
 }
 
@@ -1516,7 +1524,7 @@ pub fn exact_plan(input_json: &str, stage_json: &str, solution_json: &str) -> St
         | crate::exact::Goal::StockUpOther(level_up, ..) => Some(level_up),
         _ => None,
     };
-    let Some(exact) = crate::exact::plan_from_values_with_mode(
+    let Some(mut exact) = crate::exact::plan_from_values_with_mode(
         &prepared.items,
         &currency,
         &prepared.facility_counts,
@@ -1548,7 +1556,16 @@ pub fn exact_plan(input_json: &str, stage_json: &str, solution_json: &str) -> St
         return serde_json::to_string(&empty_production_plan(false, Some(format!("Exact plan failed its check: {problem}"))))
             .unwrap_or_default();
     }
-    let proof = (exact.proven_optimal, exact.upper_bound);
+    let food_energy_supplied = crate::exact::divert_sold_food(
+        &mut exact,
+        &prepared.items,
+        &currency,
+        &prepared.input.priorities,
+        prepared.input.food_energy_per_second,
+    );
+    // Feeding is a post-process over the proven production plan, so the original optimization
+    // bound no longer describes the reduced amount sold after diversion.
+    let proof = (exact.proven_optimal, exact.rate_per_second);
     let report = level_up.and_then(|level_up| level_up_report(&exact, &prepared.items, level_up, &currency));
     let plan = crate::exact::to_production_plan_with_mode(
         &exact,
@@ -1568,6 +1585,8 @@ pub fn exact_plan(input_json: &str, stage_json: &str, solution_json: &str) -> St
             Some((name.clone(), rate, rate * energy))
         })
         .collect();
+    js.food_energy_required = prepared.input.food_energy_per_second.max(0.0);
+    js.food_energy_supplied = food_energy_supplied;
     if prepared.input.season {
         js.season_points = Some(crate::exact::target_rate(&exact, &prepared.items, crate::models::SEASON_POINTS));
     }
@@ -1776,6 +1795,8 @@ impl PreparedInput {
             season_points,
             staffing: Vec::new(),
             food_items: vec![],
+            food_energy_required: 0.0,
+            food_energy_supplied: 0.0,
         }
     }
 }

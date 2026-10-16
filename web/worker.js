@@ -92,9 +92,6 @@ async function exactPlanJson(pkg, payload, step = () => {}, first = () => {}) {
     const { exact_byproduct_problems, exact_priority_problem, exact_level_up_problem, exact_problem, exact_plan } = pkg;
     const input = JSON.parse(payload);
     const stage = { floors: [] };
-    if ((input.food_energy_per_second || 0) > 0) {
-        stage.floors.push(['food_energy', input.food_energy_per_second]);
-    }
     let allProven = true;
     for (const problem of JSON.parse(exact_byproduct_problems(payload))) {
         const most = await solveModel(problem);
@@ -106,7 +103,7 @@ async function exactPlanJson(pkg, payload, step = () => {}, first = () => {}) {
     // the coin solve after them has to keep all of it up.
     for (const target of input.priorities || []) {
         step(`priority:${target}`, 'start');
-        const alone = stage.floors.every(([name]) => name === 'food_energy');
+        const alone = stage.floors.length === 0;
         const priority = JSON.parse(exact_priority_problem(payload, JSON.stringify(stage), target));
         if (!priority.lp) throw new Error('this setup isn\'t covered by the exact planner');
         const most = await solveModel(priority);
@@ -146,7 +143,7 @@ async function exactPlanJson(pkg, payload, step = () => {}, first = () => {}) {
     let problem = JSON.parse(exact_problem(payload, stageJson));
     if (!problem.lp) throw new Error('this setup isn\'t covered by the exact planner');
     step('final', 'start');
-    const alone = stage.floors.every(([name]) => name === 'food_energy') && !stage.pace;
+    const alone = stage.floors.length === 0 && !stage.pace;
     let solved = await solveModel(problem);
     if (!solved) throw new Error('the solver found no plan');
     if (alone) first({ measure: 'coins', objective: solved.objective, proven: solved.proven });
@@ -204,8 +201,7 @@ async function exactPlanJson(pkg, payload, step = () => {}, first = () => {}) {
 // Reports one `{ index, top, coins, proven }` per input as it goes, the base first (index -1).
 async function rankImprovements(pkg, payload, report) {
     const { measure, base, candidates, baseTop: given } = JSON.parse(payload);
-    const floorsFor = input => (input.food_energy_per_second || 0) > 0
-        ? [['food_energy', input.food_energy_per_second]] : [];
+    const floorsFor = () => [];
     const topOf = async (input) => {
         const json = JSON.stringify(input);
         const problem = JSON.parse(measure === 'level_up'

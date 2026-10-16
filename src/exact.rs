@@ -141,6 +141,59 @@ pub struct ExactPlan {
     pub staffing: Vec<(String, usize, f64)>,
 }
 
+/// Divert food already destined for sale without changing what any facility produces.
+/// Foods that contribute to a non-coin primary priority are left alone: buying the shortfall is
+/// preferable to silently reducing the plan's event points or other selected goal.
+pub fn divert_sold_food(
+    plan: &mut ExactPlan,
+    items: &[ProductionItem],
+    currency: &str,
+    protected_targets: &[String],
+    demand: f64,
+) -> f64 {
+    if demand <= 0.0 {
+        return 0.0;
+    }
+    let all: HashMap<&str, &ProductionItem> = items.iter().map(|item| (item.name.as_str(), item)).collect();
+    let mut candidates: Vec<(String, f64, f64)> = plan
+        .sold
+        .iter()
+        .filter_map(|(name, &rate)| {
+            let item = *all.get(name.as_str())?;
+            let energy = item.energy.filter(|energy| *energy > 0.0)?;
+            let protects_goal = protected_targets
+                .iter()
+                .filter(|target| target.as_str() != currency && target.as_str() != "coins")
+                .any(|target| item.earns(target) > 0.0);
+            (!protects_goal && rate > 0.0).then_some((name.clone(), rate, energy))
+        })
+        .collect();
+    candidates.sort_by(|(a, _, ae), (b, _, be)| {
+        let a_cost = all[a.as_str()].earns(currency) / ae;
+        let b_cost = all[b.as_str()].earns(currency) / be;
+        a_cost.partial_cmp(&b_cost).unwrap_or(std::cmp::Ordering::Equal).then_with(|| a.cmp(b))
+    });
+
+    let mut supplied = 0.0;
+    for (name, available, energy) in candidates {
+        let amount = available.min((demand - supplied).max(0.0) / energy);
+        if amount <= 1e-12 {
+            continue;
+        }
+        if let Some(sold) = plan.sold.get_mut(&name) {
+            *sold -= amount;
+        }
+        *plan.fed.entry(name.clone()).or_default() += amount;
+        plan.rate_per_second -= amount * all[name.as_str()].earns(currency);
+        supplied += amount * energy;
+        if supplied >= demand - 1e-9 {
+            break;
+        }
+    }
+    plan.sold.retain(|_, rate| *rate > 1e-12);
+    supplied.min(demand)
+}
+
 /// What a plan optimizes.
 #[derive(Debug, Clone, Copy)]
 pub enum Goal<'a> {

@@ -136,13 +136,13 @@
                             <label class="priority-switch">
                                 <input type="checkbox" role="switch" id="food-self-sufficient">
                                 <span class="switch-track" aria-hidden="true"></span>
-                                <span>Food self-sufficiency</span>
+                                <span>Feed from surplus</span>
                             </label>
                             <div class="input-field food-count" id="food-count-field" hidden>
                                 <label for="food-aniimo-count">Aniimo to feed</label>
                                 <input type="number" id="food-aniimo-count" min="1" step="1" value="1">
                             </div>
-                            <p class="hint small">Keeps enough food for this many Homeland Aniimo at 10 Energy per minute each, then optimizes the priorities above.</p>
+                            <p class="hint small">Uses food already produced for sale without changing the optimal production plan. Any shortage is left for you to buy.</p>
                         </div>
                     </div>
 
@@ -298,7 +298,7 @@
                     </div>
 
                     <div class="card production-steps" id="food-card" style="display: none;">
-                        <h2>Food Self-Sufficiency</h2>
+                        <h2>Food from Surplus</h2>
                         <p class="hint" id="food-summary"></p>
                         <div class="seed-table" id="food-table"></div>
                     </div>

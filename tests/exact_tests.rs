@@ -64,6 +64,21 @@ fn exact_food_floor_diverts_enough_food_before_earning_coins() {
     check_plan(&plan, &items, "coins", &counts, &ModuleLevels::default(), None).expect("food plan passes its re-check");
 }
 
+#[test]
+fn surplus_food_never_changes_the_production_plan() {
+    let Some(items) = load_items() else { return };
+    let counts = FacilityCounts::only(&[("Farmland", 6, 3)]);
+    let mut plan = solve_and_check(&items, &counts, &ModuleLevels::default());
+    let recipes_before = plan.recipe_rates.clone();
+    let sold_before = plan.sold.clone();
+    let demand = 10.0 / 60.0;
+    let supplied = aniimax::exact::divert_sold_food(&mut plan, &items, "coins", &[], demand);
+    assert!((supplied - demand).abs() < 1e-9, "supplied {supplied}, needs {demand}");
+    assert_eq!(plan.recipe_rates, recipes_before, "feeding must not start or increase any recipe");
+    assert_ne!(plan.sold, sold_before, "some already-produced food should move from sale to feeding");
+    assert!(!plan.fed.is_empty());
+}
+
 // rice_drink (Carousel Mill) needs milled_rice made at a Carousel Mill too; with two Mills, one
 // makes each. 3 rice plots, watered, make a rice drink every 1200s: 0.000833/sec x (1860 - 2 x 12
 // seed) = 1.53; 4 Wells with level-1 Aniimo make 0.014222 fresh_water/sec, the drinks use 16 each
