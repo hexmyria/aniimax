@@ -1,291 +1,260 @@
-// Display-only localization. English strings and data IDs remain the source of truth used by
-// the optimizer; Japanese is applied only to DOM text and accessible labels after rendering.
+import { translateJapanese } from './locales/ja.js';
 
-const LANGUAGE_KEY = 'aniimax-language';
-const language = localStorage.getItem(LANGUAGE_KEY) || 'en';
+// Register a language here and add its JSON catalog; English phrases are the source keys.
+const languages = { en: 'English', ja: '日本語', ru: 'Русский', 'zh-TW': '繁體中文' };
+const catalogs = { en: {} };
+const templates = {};
+let language = 'en';
+let translateZhTw;
+let preferredLanguage = 'en';
+try { preferredLanguage = localStorage.getItem('aniimax-language') || 'en'; } catch (_) { /* Private browsing can disable storage. */ }
+if (!Object.hasOwn(languages, preferredLanguage)) preferredLanguage = 'en';
 
-const items = {
-  moondew_radish:'月露大根',waxing_moon_pepper:'満月椒',moondew_radish_slices:'月露大根の飾り切り',roasted_waxing_moon_pepper:'焼き満月椒',umbral_hot_pot:'双月あったかシチュー',umbral_sweet_and_spicy_sauce:'双月甘辛ソース',umbral_pickle:'双月の漬物',harvest_platter:'豊穣の盛り合わせ',
-  wheat:'小麦',potato:'ジャガイモ',rice:'イネ',soybean:'大豆',rose:'バラ',cotton:'綿花',strawberry:'イチゴ',lavender:'ラベンダー',sugarcane:'サトウキビ',ginseng:'高麗人参',grape:'ブドウ',cranberry:'クランベリー',agave:'リュウゼツラン',willow_wood:'ヤナギ',bamboo:'竹',lemon:'レモン',cherry_blossom:'桜',apple:'リンゴ',maple_syrup:'カエデシロップ',palm_bark:'シュロの皮',chestnut:'クリ',walnut:'クルミ',natural_rubber:'天然ゴム',coconut:'ココナッツ',cocoa:'カカオ',orange_flower:'オレンジの花',rock:'岩石',clay:'粘土',shell:'貝殻',copper_ore:'銅鉱石',quartz_ore:'石英鉱石',gem:'宝石',mineral_sand:'鉱砂',well_water:'井戸水',fresh_water:'清水',deep_rock_spring_water:'深層湧水',natural_mineral_spring_water:'天然鉱泉水',sea_salt:'海塩',pearl:'真珠',aromathyst:'香晶',wool:'羊毛',petals:'花びら',star:'星',scales:'鱗粉',wood_block:'木材ブロック',
-  quick_wheat:'高速小麦',quick_potato:'高速ジャガイモ',quick_rice:'高速イネ',quick_strawberry:'高速イチゴ',quick_bamboo:'高速竹',quick_lemon:'高速レモン',quick_maple_syrup:'高速カエデシロップ',quick_coconut:'高速ココナッツ',quick_well_water:'高速井戸水',quick_fresh_water:'高速清水',quick_deep_rock_spring_water:'高速深層湧水',quick_natural_mineral_spring_water:'高速天然鉱泉水',quick_sea_salt:'高速海塩',quick_aromathyst:'高速香晶',quick_wool:'高速羊毛',quick_scales:'高速鱗粉',premium_wheat:'上級小麦',
-  wheatmeal:'小麦粉',tofu:'豆腐',milled_rice:'米',lavender_powder:'ラベンダーパウダー',rice_drink:'ライスミルク',ginseng_powder:'高麗人参パウダー',refined_flour:'精製小麦粉',coconut_oil:'ココナッツオイル',cocoa_powder:'ココアパウダー',coconut_milk:'ココナッツミルク',wood_sculpture:'木彫り',bamboo_ware:'竹かご',river_washed_stones:'水磨き石',rose_freshener:'ローズアロマチップ',pottery:'陶器',bouquet:'花束',shell_ornament:'貝殻の工芸品',lavender_sachet:'ラベンダーのサシェ',wind_chime:'風鈴',star_wish_lantern:'スターライト',dream_catcher:'ドリームキャッチャー',rubber_duck:'ラバーダック',pearl_necklace:'真珠のネックレス',woven_toy:'草編みの玩具',porcelain:'磁器',dye:'染料',gemstone_dust:'宝石の結晶塵',flowers_in_a_bottle:'生け花',doll:'ぬいぐるみ',
-  bread:'パン',roasted_soybeans:'焼き大豆',maple_candy_roasted_potatoes:'こんがりメープルポテト',apple_tart:'アップルタルト',rose_shortbread:'ローズスコーン',lavender_cookies:'ラベンダークッキー',apple_candy:'アップルキャンディー',grape_candy:'グレープキャンディー',caramel_nut_chips:'キャラメルナッツスライス',maple_candy_star:'メープルスター',coconut_cookie:'ココナッツクッキー',flower_bread:'お花パン',berry_chocolate_coconut_pudding:'イチゴとチョコのココナッツプリン',potato_chips:'ポテトチップス',dried_lemon_slices:'ドライレモン',dried_cherry_blossom:'乾燥桜花',dried_bean_curd:'干し豆腐',dried_apple_slices:'ドライアップル',dried_strawberries:'ドライストロベリー',nuts:'ナッツ',dried_ginseng:'乾燥高麗人参',dried_grapes:'ドライグレープ',shredded_coconut:'ココナッツファイン',dried_cranberries:'ドライクランベリー',dried_flowers:'ドライフラワー',
-  plain_rice_porridge:'白がゆ',rose_concentrate:'ローズシロップ',rock_candy:'氷砂糖',strawberry_jam:'ストロベリージャム',maple_candy_apple_jam:'メープルりんごジャム',chestnut_puree:'栗のピューレ',grape_jam:'ブドウジャム',ginseng_porridge:'高麗人参の滋養がゆ',maple_sugar_chunk:'メープルシュガー',malt_sugar:'麦芽糖',cocoa_spread:'カカオソース',cranberry_jam:'クランベリージャム',agave_syrup:'リュウゼツランのシロップ',bamboo_joss_stick:'竹線香',rose_incense:'バラの香り',cherry_incense:'桜の香り',lavender_incense:'ラベンダーの香り',lemon_incense:'レモンの香り',herbal_ginseng_aroma:'高麗人参入りハーブティー',soap:'石けん',orange_flower_incense:'オレンジの香り',mixed_perfume:'調合香水',lotion:'ボディローション',
-  wheat_tea:'小麦茶',toasted_rice_green_tea:'玄米茶',potato_kvass:'ポテト入りクワス',strawberry_juice:'イチゴジュース',apple_juice:'リンゴジュース',sugarcane_juice:'サトウキビジュース',grape_juice:'ブドウジュース',ginseng_water:'高麗人参ジュース',grape_lemon_drink:'葡萄レモンジュース',walnut_milk:'ウォルナットミルク',cranberry_juice:'クランベリージュース',coconut_cooler:'ココナッツドリンク',agave_drink:'アガベドリンク',hot_cocoa:'ホットココア',coconut_cocoa:'ココナッツカカオ',orange_flower_dew:'オレンジのフラワーウォーター',
-  soy_sauce_fried_rice:'醤油チャーハン',creamy_potato_soup:'ジャガイモのポタージュ',cherry_blossom_rice_ball:'桜のおにぎり',tanghulu:'フルーツ飴',soy_sauce_tofu:'豆腐の醤油焼き',sugar_roasted_chestnuts:'焼き甘栗',steamed_vermicelli_roll:'米粉クレープ',ginseng_chestnut_cake:'高麗人参と栗のケーキ',walnut_cake:'くるみケーキ',jello:'ゼリー',strawberry_candy:'イチゴキャンディー',rich_grape_compote:'葡萄香るジュレ',strawberry_cream_puff:'イチゴグランプルケーキ',cranberry_chocolate:'クランベリーチョコ',soy_sauce:'醤油',salted_cherry_blossom:'桜の塩漬け',sweet_rice_drink:'ライスミルク',cider_vinegar:'リンゴ酢',rice_vinegar:'米酢',salted_lemon:'塩レモン',candied_strawberries:'イチゴのシロップ漬け',candied_orange_flower:'オレンジの花のシロップ漬け',
-  cotton_thread:'綿糸',woolen_yarn:'毛糸',cotton_fabric:'綿布',palm_rope:'シュロ縄',wool_fabric:'ウール生地',dyed_cotton_fabric:'染色された綿布',growth_bud:'成長の芽',growth_flower:'成長の花',growth_fruit:'成長の実',aniipod:'アニポッド',aniipod_pro:'スーパーポッド',aniipod_mega:'ハイパーポッド',rough_lumber:'荒材',standard_planks:'規格木材',laminated_beams:'集成材の梁',densified_timber_component:'高密度木製部材',coarse_sifted_ore:'粗粒骨材',sintered_ore_brick:'焼結鉱石レンガ',refined_ore:'精錬鉱材',microcrystalline_ore_plate:'微結晶鉱物板',
-  premium_river_washed_stones:'上級水磨き石',premium_rose_freshener:'上級ローズアロマチップ',advanced_wind_chime:'上級風鈴',advanced_gemstone_dust:'高級宝石の結晶塵',premium_bread:'上級パン',premium_berry_chocolate_coconut_pudding:'上級イチゴチョコのココナッツプリン',advanced_lemon_incense:'上級レモンアロマ',premium_soap:'上級石けん',premium_mixed_perfume:'上級調合香水',premium_potato_soup:'上級ジャガイモのポタージュ',premium_jello:'上級ゼリー',premium_sweet_rice_wine:'上級ライスミルク',premium_salted_lemon:'上級塩レモン'
-};
-
-// Some hand-written result labels do not use the title casing produced from the internal ID.
-// Keep these aliases in the display layer so both forms resolve to the same verified game name.
-const itemAliases = {
-  'Umbral Sweet and Spicy Sauce':'双月甘辛ソース',
-  'Umbral Sweet And Spicy Sauce':'双月甘辛ソース',
-  'Umbral Sweet Spicy Sauce':'双月甘辛ソース'
-};
-
-const names = {
-  'Farmland':'畑','Woodland':'林','Mine':'鉱山','Well':'井戸','Tidewhisper Sandcastle':'潮の砂城','Sandcastle':'砂城','Dewy House':'ミツドリハウス','Nimbus Bed':'雲のベッド','Starfall Hammock':'星降るハンモック','Floral Windmill':'花の風車','Heat Furnace':'加熱炉','Cooling Unit':'冷却装置','Sunlamp':'太陽灯','Carousel Mill':'メリーゴーランド式ミル','Crafting Table':'作業台','Claw Game Cooker':'クレーンゲーム式コンロ','Jukebox Dryer':'メロディ乾燥機','Simmering Pot':'煮込み鍋','Phonolfactory Table':'蓄音機ふう調香台','Bouncy Brew Keg':'ポンポン醸造樽','Blazing Stove':'大火力かまど','Pickling Jar':'熟成漬け込み樽','Joy Wheel Loom':'観覧車ふう糸車','Dance Pad Polisher':'ダンスパワーマシン','Aniipod Maker':'アニポッドメーカー','Woodworking Bench':'木工台','Chimney Kiln':'煙突鍛造炉',
-  'Earth':'土','Water':'水','Leisure':'遊び','Wind':'風','Artisanship':'クラフト','Fire':'火','Dark':'闇','Perfumery':'調香','Lightning':'雷','Light':'光','Ice':'氷','Grass':'草','Hauling':'運搬','Instinctive':'人見知り','Energetic':'人懐っこい','Nimble':'直感的','Practical':'現実的','Faithful':'心優しい','Tenacious':'冷酷','Playful':'自由気まま','Judicious':'従順','Freeze':'極寒','Cool':'涼しい','Room temp':'常温','Warm':'暖かい','Scorching':'灼熱','Adequate':'適温',
-  'Materials Processing':'素材加工','Aniimo Materials':'アニモ素材','Materials':'素材','Environment':'環境設備','Ecological Module':'生態モジュール','Kitchen Module':'キッチンモジュール','Resource Detector':'資源探知機','Crafting Module':'クラフトモジュール','Crackle Generator':'パチパチ発電ポール','Crackle Power Pole':'パチパチ電柱'
-};
-
-// Runtime result text is assembled from solver data, so these fragments cannot be covered by
-// static HTML translation alone. Keep the English values in app.js and translate only the
-// rendered display strings here.
-const dynamic = {
-  'Link copied. It includes your current setup.':'現在の設定を含むリンクをコピーしました。','Copy the link above to share your setup.':'上のリンクをコピーして設定を共有してください。','Could not create a share link for this setup.':'この設定の共有リンクを作成できませんでした。','Your changes are saved in this browser.':'変更内容をこのブラウザに保存しました。','This share link is invalid. Your saved setup was kept.':'共有リンクが正しくありません。ブラウザに保存済みの設定は維持されました。','Shared setup loaded. Your saved setup is kept until you edit this one.':'共有設定を読み込みました。内容を変更するまでは、ブラウザに保存済みの設定も維持されます。','Laying out…':'配置を計算中…','The layout couldn\'t be worked out.':'配置を算出できませんでした。','proven best':'最適性を証明済み','best found in time':'時間内の最良解','The planner stopped':'計算が停止しました','No Aniimo yet. Add the ones you have, or start from the Best plan\'s team.':'アニモがまだ登録されていません。所持アニモを追加するか、「最適」のチームから始めてください。','No plan found with these Aniimo.':'このアニモ編成では計画を作成できませんでした。','How many you have that are alike':'同じ構成の所持数','One fewer':'1体減らす','One more':'1体増やす','Remove this Aniimo':'このアニモを削除','Plans will go for the most Home Coins.':'ホームコインが最大になる計画を表示します。','This plan is for the most Home Coins.':'この計画ではホームコインを最大化します。','You already have everything it costs. This plan is for the most Home Coins.':'必要なものはすべて所持しています。ホームコインを最大化する計画を表示します。','Where everything is carried':'すべての生産物の運搬先','trips/hour':'回/時',
-  'Latest result':'最新の結果','Result saved in this browser.':'このブラウザに結果を保存しました。','Could not save this result.':'結果を保存できませんでした。','Saved result deleted.':'保存した結果を削除しました。','Restored the latest result from this browser.':'このブラウザから最新の結果を復元しました。','No named results saved yet.':'名前付きの保存結果はまだありません。','Saved results are unavailable in this browser.':'このブラウザでは保存結果を利用できません。','Name this result':'結果名','Open':'開く','Delete':'削除','season':'イベント','free':'無料','Nothing in this plan is carried to the Storage Unit.':'この計画では倉庫へ運搬するものはありません。','Not placed, size unknown:':'大きさが不明なため未配置：','No room found in':'配置スペースがありません：',
-  'Not yet verified in game.':'ゲーム内未確認。',
-  'Alternates one at a time:':'1つずつ切替：',
-  'Idle-friendly plan: each active level-up recipe has its own Woodworking Bench or Chimney Kiln and runs simultaneously.':'放置優先：稼働するレベルアップ素材ごとに木工台または煙突鍛造炉を専用化し、同時稼働します。',
-  'Not enough processors for dedicated operation, so this plan switches recipes on shared Woodworking Benches or Chimney Kilns.':'設備数が専用稼働に足りないため、木工台または煙突鍛造炉を共有してレシピを切り替える計画です。',
-  'Daily-order plan: shared facilities switch recipes only as needed; return them to the normal plan after every order is ready.':'デイリー注文対応：共用設備は必要な間だけレシピを切り替えます。全注文品が揃ったら通常計画へ戻してください。',
-  'Search order items':'注文品を検索','Pick an order item from the list.':'一覧から注文品を選択してください。',
-  'Order quantity':'注文数','Other':'その他','Custom order quantity':'その他の注文数','Subtract items already in stock':'所持品を差し引く','Optional. Enter stock counts below only when you want the plan to make the remaining amount.':'任意項目です。所持分を除いた残りだけ生産したい場合に入力してください。',
-  'Event Points':'イベントポイント','Custom':'詳細設定','Maximizes Home Coins with fixed recipes, then uses equally profitable spare capacity for the next RV\'s materials.':'レシピを固定してホームコインを最大化し、同じ利益を保てる余力で次のRV素材を準備します。','Maximizes Harvest Moon Points first, then prepares the next RV\'s materials. Enable the event recipes you have unlocked below.':'収穫月ポイントを最優先し、次に次回RVの素材を準備します。下で解放済みのイベントレシピを有効にしてください。','Points per item:':'1個あたりのポイント：',
-  'Gets everything your next RV level costs as soon as possible, then keeps stockpiling its Woodworking Bench and Chimney Kiln materials.':'次のRVレベルに必要なものを最短で揃え、その後も木工台・煙突鍛造炉のレベルアップ素材を備蓄します。','Enter the orders currently on your board. The plan reserves every requested item, finishes all orders as soon as possible, then prepares the next RV\'s materials.':'現在の注文ボードを入力してください。注文品を取り置きして全注文を最短で揃え、次に次回RVの素材を準備します。',
-  'Moondew Radish and Waxing Moon Pepper 1; Roasted Waxing Moon Pepper and Moondew Radish Slices 4; Umbral Hot Pot, Umbral Sweet and Spicy Sauce, Umbral Pickle and Harvest Platter 8.':'月露大根・満月椒は1、焼き満月椒・月露大根の飾り切りは4、双月あったかシチュー・双月甘辛ソース・双月の漬物・豊穣の盛り合わせは8。',
-  'same unit(s)':'同じ設備','manually switch this facility between the listed recipes':'表示されたレシピ間はこの設備を手動で切替','For a daily order; manually switch this facility between the listed recipes':'デイリー注文用。表示されたレシピ間はこの設備を手動で切り替えます。',
-  'Fastest Daily Orders, then Level-Up Materials':'デイリー注文を最短達成後、レベルアップ素材','Fastest Level-Up, then More Materials':'レベルアップを最短達成後、素材を追加備蓄','Most Next-RV Materials':'次回RV素材を最大化',
-  'For a daily order':'デイリー注文用','Every order is already in stock.':'すべての注文品を所持しています。','Daily orders':'デイリー注文','Order item':'注文品','Required':'必要数','In stock':'所持数','Select an item':'アイテムを選択','Add order slot':'注文枠を追加','Fastest Daily Orders':'デイリー注文を最短達成','Profit before orders are ready':'注文品完成までの利益','Orders ready':'注文品完成',
-  'Selected E-mode facilities exceed generator output by':'選択した電力モード設備の消費電力が発電量を超えています。超過：','selected E-mode facilities are outside the available power grid.':'件の電力モード設備に配電できません。','selected E-mode facility is outside the available power grid.':'件の電力モード設備に配電できません。',
-  'any level':'レベル不問','Coarse-Sifted Ore':'粗粒骨材','River-Washed Stones':'水磨き石','Premium River-Washed Stones':'上級水磨き石','Sugar-Roasted Chestnuts':'焼き甘栗','Flowers in a Bottle':'生け花',
-  'Sowing crops':'作物の種まき','Reaping crops':'作物の収穫','Reclaiming crops':'作物の開墾','Collecting crops':'作物の採集','Watering crops':'作物への水やり','Logging crops':'作物の伐採',
-  'Sowing farmland':'畑の種まき','Reaping farmland':'畑の収穫','Reclaiming farmland':'畑の開墾','Collecting farmland':'畑の採集','Watering farmland':'畑への水やり',
-  'Sowing woodland':'林の種まき','Reaping woodland':'林の収穫','Reclaiming woodland':'林の開墾','Collecting woodland':'林の採集','Watering woodland':'林への水やり','Logging woodland':'林の伐採',
-  'Sowing':'種まき','Reaping':'収穫','Reclaiming':'開墾','Collecting':'採集','Watering':'水やり','Logging':'伐採','crops':'作物','farmland':'畑','woodland':'林',
-  'Carries produce to storage. How much work this is isn\'t known yet; add more if produce piles up.':'生産物を倉庫へ運びます。必要な作業量は未確認です。生産物が滞留する場合は人数を増やしてください。',
-  'Hauling, any level · carries produce to storage; add more if produce piles up':'運搬、レベル不問・生産物を倉庫へ運搬。滞留する場合は人数を増やしてください',
-  'Cooking, smelting and heat':'調理・精錬・暖房','Planting seeds and gathering':'種まき・採集','Brewing, fetching water and watering':'醸造・水くみ・水やり','Reclaiming land and mining':'開墾・採掘','Electricity':'電力加工','Cooling the homeland':'ホームの冷却','Processing with wind':'風力加工','Harvesting, cutting, pickling and drying':'収穫・伐採・漬け込み・乾燥','Lighting the homeland':'ホームの照明','Carrying produce to storage':'生産物を倉庫へ運搬','Handcrafted goods':'クラフト製品の作成','Making things while playing':'遊びながら生産','Perfumes and incense':'香水・お香','Food processing + crafting/industry':'食品加工・制作工業',
-  'Side by side, touching.':'隙間なく横に並べます。','Not made by this plan':'このプランでは生産されません','An unknown error occurred.':'不明なエラーが発生しました。',
-  'On: the plan goes for this':'オン：この項目を生産対象にします','Off: the plan ignores this':'オフ：この項目を生産対象から外します','no Aniipod Maker yet':'アニポッドメーカーがありません',
-  'Failed to load the optimizer. Please refresh the page.':'最適化ツールを読み込めませんでした。ページを再読み込みしてください。','Pick a recipe from the list.':'一覧からレシピを選択してください。','Stop skipping':'除外を解除','Plans will go for the most coins.':'コインが最大になる計画を表示します。','never':'達成不可','have it':'所持済み','Profit':'利益',
-  'Can\'t make this? Skip it and plan again':'生産できない場合は除外して再計算','Not yet checked in game.':'ゲーム内未確認。',
-  'Sells directly':'直接売却','For the level-up':'レベルアップ用','Nothing it can make helps this plan':'この計画に役立つ生産品がありません','No further profitable use found':'これ以上の有益な用途がありません','This goal would take an unreasonably long time to reach.':'この目標の達成には非常に長い時間がかかります。'
-  ,'Feeds the Aniimo':'アニモの餌に使用','feeding the Aniimo':'アニモの餌'
-  ,'No food-self-sufficient plan found':'餌を自給できる計画が見つかりませんでした'
-};
-
-const ui = {
-  '⚠A few recipes, facility levels and counts haven\'t been confirmed in game yet; they\'re marked where they\'re used.':'⚠一部のレシピ、設備レベル、設置数はゲーム内未確認です。該当箇所に表示しています。','Switch on what you want and drag to rank it. The plan makes as much of the first as it can, then as much of the next as that allows, and so on. Whatever\'s left always goes to Home Coins.':'必要な項目をオンにしてドラッグで順位を決めます。1番目を可能な限り生産し、その量を維持できる範囲で2番目以降も順に最大化します。残った余力はホームコイン生産に使われます。','Gets everything your next RV level costs as soon as possible, then earns as many Home Coins as that leaves room for.':'次のRVレベルに必要なものを最短で揃え、残った余力でホームコインを最大限に生産します。','Unofficial fan-made tool. Not affiliated with or endorsed by the makers of Aniimo.':'非公式のファン製ツールです。Aniimoの開発・運営元とは関係ありません。','Your inputs are saved in your browser and never sent anywhere.':'入力内容と保存結果はこのブラウザ内だけに保存され、外部へ送信されません。',
-  'Home Coins':'ホームコイン','Harvest Moon Festival':'満月の豊穣祭','Moonray Wheat':'月光の穂','Harvest Moon Points':'豊穣祭ポイント','Recipe Notes':'レシピノート','Share setup':'設定を共有','Shareable link':'共有リンク','Saved Results':'保存した結果','Save this result':'この結果を保存','My Aniimo':'所持アニモ','Aniimo Team':'アニモチーム','Opportunities':'改善候補','Seeds to Plant':'植える種','Profit by Product':'製品別利益','What Each Facility Should Do':'各設備の稼働内容','Homeland Layout':'ホーム配置','How it\'s laid out':'配置方法','Show the whole homeland':'ホーム全体を表示','Simulate':'シミュレーション','Replay':'再生','Set a Goal':'目標を設定','Target Home Coins':'目標ホームコイン','Current Home Coins':'現在のホームコイン','Product Breakdown':'製品内訳','Worth Home Coins':'ホームコイン価値','Seeds Needed':'必要な種','The Model':'計算モデル','Time per Batch':'1バッチの時間','Environment Coverage':'環境設備の範囲','Level Up':'レベルアップ','Time to Reach a Goal':'目標到達時間','The Backup Planner':'予備プランナー','1. Tell It What You\'ve Built':'1. 建設済みの設備を入力','2. Pick a Strategy':'2. 方針を選択','3. Find the Best Plan':'3. 最適な計画を作成','4. Set a Goal (Optional)':'4. 目標を設定（任意）','Understanding the Results':'結果の見方','Level-Up':'レベルアップ','Your Rates':'生産速度','Storage Unit':'倉庫','Share':'共有','Minimum facility level':'最低設備Lv.',
-  'Food self-sufficiency':'余剰を餌にする','Feed from surplus':'余剰を餌にする','Aniimo to feed':'餌を与えるアニモ数','Food Self-Sufficiency':'餌の自給','Food from Surplus':'余剰から回す餌','Food':'餌','Amount/day':'1日あたりの個数','Energy/day':'1日あたりのEnergy',
-  'Efficiency':'効率','Plant cost':'種代','best Lv.':'最適 Lv.','Also yields Wood Blocks.':'副産物として木材ブロックも得られます。','Also yields Mineral Sand.':'副産物として鉱砂も得られます。','Provides Warm or Scorching growing conditions for crops that need one':'暖かいまたは灼熱の栽培環境を提供します','Provides Cool or Freeze growing conditions for crops that need one':'涼しいまたは極寒の栽培環境を提供します','Provides Adequate growing conditions for crops that need one':'適温の栽培環境を提供します','The calculator picks whichever mode is more profitable.':'計算結果に応じて、より利益の高いモードを選びます。','Covers a 9x9 area around itself; how many plots fit depends on what shares it.':'設備を中心に9×9の範囲を覆います。配置できる区画数は、範囲を共有する設備によって変わります。','Makes Aniimo EXP, not coins.':'コインではなくアニモEXPを生産します。','Unlock levels not yet confirmed in game.':'解放レベルはゲーム内未確認です。','Aniipods are for catching Aniimo, not for selling.':'アニポッドは売却用ではなく、アニモの捕獲に使用します。','Turns Wood Blocks into RV level-up materials.':'木材ブロックをRVレベルアップ素材へ加工します。','Turns Mineral Sand into RV level-up materials.':'鉱砂をRVレベルアップ素材へ加工します。',
-  'facilities':'設備','math':'計算方法','help':'使い方','light':'ライト','dark':'ダーク','aniimo homeland production optimizer':'アニモ・ホームランド生産最適化ツール',
-  'Your Homeland':'あなたのホームランド','Clear saved values':'保存値を消去','Simple':'かんたん','Advanced':'詳細','Input mode':'入力モード','RV level':'RVレベル','Facilities and modules':'設備とモジュール','Facilities':'設備','Item Upgrade Modules':'アイテム強化モジュール','Strategy':'戦略','Level up':'レベルアップ','Priorities':'優先順位','Daily orders':'デイリー注文','Recipes':'レシピ','Special recipes':'特別レシピ','Recipes to skip':'除外するレシピ','Search recipes':'レシピを検索','Recipe to skip':'除外するレシピ','Skip':'除外','Find the best plan':'最適プランを検索','Solving...':'計算中…',
-  'Count':'数','Level':'レベル','Add level':'レベルを追加','Remove this level':'このレベルを削除','Fill from RV level':'RVレベルから入力','Fill':'入力','Modules':'モジュール','not yet':'未解放','on':'有効','skipped':'除外','On':'オン','Off':'オフ','Coins':'コイン','Aniimo EXP':'アニモEXP','Aniipods':'アニポッド','Wood Blocks':'木材ブロック','Mineral Sand':'鉱砂',
-  'Aniimo team':'アニモチーム','Best':'最適','Minimum':'最低限','I have level 4':'レベル4を所持','Your rate':'生産速度','Your rates':'生産速度','Seeds to plant':'植える種','Profit by product':'製品別利益','What each facility should do':'各設備の稼働内容','Set a goal':'目標を設定','Goal':'目標','Target Coins':'目標コイン','Current Coins':'現在のコイン','Total time':'合計時間','Coins Produced':'生産コイン','Product breakdown':'製品内訳','Seeds needed':'必要な種','Item':'アイテム','Facility':'設備','Amount':'数量','Total Worth':'合計価値','Crop':'作物','Plots':'区画','Plantings/Plot':'1区画あたりの作付回数','Total Seeds':'種の合計','Profit/sec':'毎秒利益','Level-up':'レベルアップ','Level up to RV':'目標RVレベル','What you already have':'現在の所持数','Producing':'生産内容','Why':'理由','How many':'必要数','Busy on average':'平均稼働率','Where':'担当','Cost':'費用','Need':'必要','Have':'所持','Ready in':'準備まで','Surplus:':'余剰：','Total':'合計','Product':'生産品','Sold per hour':'1時間あたりの販売数','Profit per hour':'1時間あたりの利益','Share':'割合','not sold':'非売品','RV level-ups':'RVレベルアップ素材','Overlap':'重複範囲','Facility Recipes':'設備別レシピ','Loading recipe data...':'レシピデータを読み込み中…',
-  'Facility Recipes':'設備別レシピ','Loading recipe data...':'レシピデータを読み込み中…','How It Works':'仕組み','How to Use':'使い方','The model':'計算モデル','Time per batch':'1バッチの時間','Environment coverage':'環境設備の範囲','Time to reach a goal':'目標到達時間','The backup planner':'予備プランナー','Understanding the results':'結果の見方','How to read this':'表の見方','Theoretical utilization':'理論稼働率','facility total':'設備合計','E-mode':'電力モード','Use':'使用','Power relay':'電力中継','Power:':'電力：','Generator':'発電機','unavailable':'利用不可','power':'電力','pole':'本の電柱','poles':'本の電柱','Future expansion slot':'将来の増設枠','Display this facility type on the Crackle power grid; production calculations are unchanged':'この種類の設備を電力網へ接続して表示します。生産計算は変更しません','Farming':'農林','Gathering':'採集・常駐施設','Food processing':'食品加工','Crafting and industry':'制作・工業','Processing':'加工','Storage Units':'倉庫','1. Tell it what you\'ve built':'1. 建設済みの設備を入力','2. Pick a strategy':'2. 方針を選択','3. Find the best plan':'3. 最適な計画を作成','4. Set a goal (optional)':'4. 目標を設定（任意）',
-  'per second':'毎秒','per minute':'毎分','per hour':'毎時','per day':'毎日','Rate unit':'速度の単位','Priority':'優先順位','Inputs':'材料','Yield':'生産量','Time':'時間','Sell':'売却','Module':'モジュール','Aniimo':'アニモ','coin':'コイン','coins':'コイン','workload':'作業量','special':'特別','unverified':'未確認','Ready now':'準備完了','Nothing in this plan needs an Aniimo.':'このプランではアニモは不要です。','No Aniimo needed.':'アニモ不要','Nothing profitable to produce with the current facilities.':'現在の設備では利益を生む生産がありません。','Finding the best plan...':'最適プランを検索中…','Not made by this plan':'このプランでは生産されません','You already have everything it costs. This plan is for the most coins.':'必要なものはすべて所持しています。コインを最大化する計画を表示します。','By then you\'ll also have:':'その時点で得られるもの：','Not yet checked in game':'ゲーム内未確認','Takes a rare currency to unlock':'解放には希少通貨が必要です',
-  'A few recipes, facility levels and counts haven\'t been confirmed in game yet; they\'re marked where they\'re used.':'一部のレシピ、設備レベル、設置数はゲーム内でまだ確認されていません。該当する箇所には未確認であることを表示しています。','Assumes you\'ve built and upgraded everything your RV level allows.':'選択したRVレベルで建設・強化できるものをすべて揃えているものとして計算します。','Set the count and level for each facility you have.':'所有する各設備の数とレベルを設定します。','Replaces every count and level below with what that RV level allows.':'以下の数とレベルを、そのRVレベルで利用できる内容に置き換えます。','Set the level for each upgrade module you have unlocked (0 = not unlocked).':'解放済みの各強化モジュールのレベルを設定します（0＝未解放）。','Gets everything your next RV level costs as soon as possible, then earns as many coins as that leaves room for.':'次のRVレベルに必要なものを最短で揃え、残った余力でコインを最大限に生産します。','Switch on what you want and drag to rank it. The plan makes as much of the first as it can, then as much of the next as that allows, and so on. Whatever\'s left always goes to coins.':'作りたいものをオンにし、ドラッグして優先順位を決めてください。計画では、まず1番目を可能な限り生産し、その生産量を維持できる範囲で2番目以降も順に最大化します。残った余力は常にコイン生産に使われます。','Counts toward the level-up. Wood Blocks, Mineral Sand and lower tiers get processed up.':'入力した所持数はレベルアップ素材として計算されます。木材ブロック、鉱砂、下位素材は上位素材へ加工されます。','These take a rare currency to unlock. Plans only use the ones you tick.':'解放には希少通貨が必要です。チェックしたレシピだけが計画で使用されます。','Plans won\'t use these, e.g. recipes behind unlocks you don\'t have yet. You can also skip one straight from a plan with its ✕.':'まだ解放していないなど、作れないレシピを計画から除外できます。計画内の✕を押して、そのレシピを直接除外することもできます。','Every recipe in the game data, grouped by facility. This is a reference table, not tied to your owned facility counts or levels.':'ゲームデータ内のすべてのレシピを設備別に表示します。参照用の一覧であり、所有している設備の数やレベルには左右されません。','Still working this setup out...':'この編成を計算中…','How the team is worked out':'チーム編成の算出方法','Net of seed costs.':'種代を差し引いた利益です。','Updates instantly from the plan above.':'上の計画をもとに即時更新されます。','One seed per planting, for every Farmland and Woodland crop in the plan.':'計画に含まれる畑と林の作物は、作付け1回につき種を1個使用します。','Optimizer not ready. Please wait...':'最適化ツールを準備中です。しばらくお待ちください…','Failed to load recipe data. Please refresh the page.':'レシピデータを読み込めませんでした。ページを再読み込みしてください。','Coins, from what\'s left':'余力で得るコイン','No Dance Pad Polisher yet':'ダンスパワーマシンがありません','No Aniipod Maker yet':'Aniipod Makerがありません'
-  ,'Enter the orders currently on your board. The plan reserves every requested item, finishes all orders as soon as possible, then uses the remaining capacity for Home Coins.':'現在の注文ボードにある内容を入力してください。注文品は売却せずに取り置きし、全注文を最短で揃えたうえで、残った生産力をホームコイン獲得に使います。'
-};
-
-// Long explanatory copy is translated separately from game terminology. These translations are
-// written by agy; verified Japanese game names from `names` are used where they are available.
-const longForm = {
-  'Food processing and crafting/industry form one workshop district. When a district receives two Storage Units, they keep separate catchment areas without being scattered across the homeland. Gathering and workshop facilities use stable Lv.20-sized islands: dashed outlines are future expansion slots, so later copies can be added without rearranging the existing machines. Farming remains flexible because its environment layouts change as plots are added.':'食品加工と制作・工業は1つの加工制作地区にまとめます。同じ地区へ倉庫を2個割り当てる場合は、別々の集荷範囲を保ちつつホームの両端へ分散させません。採集・常駐施設と加工制作設備では、Lv.20の最大設置数を基準に同種設備の並びを固定し、破線で将来の増設枠を示します。畑と林は、区画の追加に応じて環境設備との組み合わせが変わるため固定しません。',
-  'From RV 12, choose E-mode in the facility table to add a Crackle Generator and the minimum connected Power Poles needed to reach those selected owned facilities, including idle ones. The summary compares their power demand with generator output. This is a placement preview only; it does not change the plan\'s production rates.':'RV 12以降は、設備表の「電力モード」で設備を選ぶと、現在停止中の所有設備も含めて電力が届くようにパチパチ発電ポールと必要最小限のパチパチ電柱を配置します。概要には設備の消費電力と発電量を表示します。これは配置確認用であり、計画上の生産速度は変更しません。',
-  'Click or tap a facility to rotate its whole production district 90 degrees: the farming block, primary-industry block, or processing block. The district\'s facilities and Storage Units move together and slide to the nearest valid position if needed. Keyboard users can focus a facility and press Enter or Space. A turn is rejected only when no valid position fits.':'設備をクリックまたはタップすると、その設備が属する「畑・林」「一次産業」「加工・制作」の地区全体を90度回転します。地区内の設備と倉庫は一緒に移動し、必要なら収まる最寄りの位置へずらします。キーボードでは設備を選択してEnterまたはSpaceを押します。収まる位置がない場合だけ回転を適用しません。',
-  'Rotate block 90 degrees':'ブロックを90度回転',
-  'Production block':'生産ブロック','Rotate 90°':'90度回転','Farming block':'畑・林ブロック','Primary industry block':'一次産業ブロック','Processing block':'加工・制作ブロック','Could not rotate:':'回転できません：',
-  'Keeps enough food for this many Homeland Aniimo at 10 Energy per minute each, then optimizes the priorities above.':'ホームに配置するアニモが1体あたり毎分10 Energyを消費するものとして必要な餌を確保し、そのうえで上の優先順位を最適化します。',
-  'Uses food already produced for sale without changing the optimal production plan. Any shortage is left for you to buy.':'最適な生産内容は変えず、売却予定の食品だけを餌に回します。不足分は購入するものとして表示します。','No surplus food; buy all required food.':'餌に回せる余剰食品がないため、必要分をすべて購入してください。',
-  'The latest result is restored automatically. Save named results to compare or revisit later.':'最新の結果は自動的に復元されます。比較したり後で見直したりする結果には名前を付けて保存できます。',
-  'A seasonal event with its own currency, Moonray Wheat, which buys the season\'s seeds. Keeping enough wheat on hand is up to you; plans show how much their seeds use. Season items also earn Harvest Moon Points, which you can rank under Priorities.':'イベント専用通貨「月光の穂」でイベント作物の種を購入します。必要な月光の穂を確保することは計画に含まれませんが、種に必要な数は表示されます。イベントアイテムから得られる豊穣祭ポイントは、「優先順位」で順位を設定できます。',
-  'Best: the best Aniimo you have of each ability (pick its level above), with each facility\'s personality. My Aniimo: the Aniimo you list; each works what its abilities allow, for the hours it has. Minimum: the lowest ability level each recipe accepts, with no personality bonus. The plan below follows whichever is picked.':'「最適」では、能力ごとに所持している最高レベルのアニモを、各設備と相性のよい性格で配置します。レベルは上で指定できます。「所持アニモ」では、登録したアニモを能力と稼働可能時間に応じて割り当てます。「最低限」では性格ボーナスを使わず、各レシピに必要な最低能力レベルを採用します。下の計画には、ここで選んだ設定が反映されます。',
-  'An Aniimo can take any job needing its ability at or below its level while it has hours to spare, as long as no two of its facilities want opposite personalities. It has four personalities, one from each pair, shown as letters over its portrait: Instinctive or Energetic (I/E), Nimble or Practical (N/S), Faithful or Tenacious (F/T), Playful or Judicious (P/J). Facilities with a resident Aniimo (Sandcastle, Dewy House and the like) need one each, and so does each Heat Furnace (Fire), Cooling Unit (Ice) and Sunlamp (Light) in use. With My Aniimo, Farmland and Woodland jobs only need someone able to do each; they\'re quick, so they aren\'t counted against anyone\'s hours. Not yet checked in game: each recipe\'s minimum ability level, the Farmland and Woodland jobs, and whether an environment building\'s Aniimo level or personality matters.':'アニモは稼働時間に余裕がある限り、自分の能力レベル以下で実行できる仕事を担当できます。ただし、正反対の性格を求める設備を同時には担当できません。アニモは4組の対から1つずつ性格を持ち、肖像の文字で表示されます。人見知り／人懐っこい（I/E）、直感的／現実的（N/S）、心優しい／冷酷（F/T）、自由気まま／従順（P/J）です。常駐アニモが必要な設備（砂城、ミツドリハウスなど）には1体ずつ必要で、使用中の加熱炉（火）、冷却装置（氷）、太陽灯（光）にもそれぞれ1体必要です。「所持アニモ」では、畑と林の作業は短時間のため、各作業を実行できるアニモがいれば稼働時間を消費しないものとして扱います。各レシピの最低能力レベル、畑と林の作業、環境設備でアニモのレベルや性格が影響するかはゲーム内未確認です。',
-  'Every finished batch is carried to the Storage Unit (SU), so each facility is placed by its trips per hour times its straight-line distance to it: the busiest sit closest, idle ones go to the edge. Each environment building\'s plots can go anywhere its coverage still reaches them, so they sit on its Storage Unit side. No covered plot reaches another building\'s coverage, and a crop that needs an environment but is grown without one stays out of all of it, so every crop keeps the temperature the plan gave it. Crops that need no environment can go anywhere. Everything stays within the plots your RV level has open (each 20 by 15 tiles; in Advanced mode, the lowest RV level that allows what you entered), and the Storage Unit goes wherever the walking comes out least. Hover or tap a facility for its trips and distance. The diagram plays the homeland out in sped-up game time from when everything is set up: each finished batch goes to the Storage Unit (carrying takes no time here), and a recipe starts only once what it takes is there. A ring on each facility shows its batch, amber while it waits for materials. This is a close-packed arrangement worked out step by step, not a proven shortest one.':'完成した各バッチは倉庫（SU）へ運ばれます。そのため、設備は「1時間あたりの運搬回数×倉庫までの直線距離」が小さくなるように配置され、稼働率の高い設備ほど倉庫の近く、停止中の設備ほど外側になります。環境設備が覆う区画は効果範囲内で動かせるため、倉庫側へ寄せて配置します。環境設備同士の効果範囲は重ねず、環境なしで育てる作物も効果範囲外に置くことで、計画どおりの温度を保ちます。環境を必要としない作物は任意の場所に配置できます。すべての設備はRVレベルで解放済みの区画内に収めます（各区画は20×15タイル。「詳細」では入力内容を利用できる最低RVレベルを使用）。倉庫は総移動距離が最も短くなる位置に置かれます。設備にカーソルを合わせるかタップすると、運搬回数と距離を確認できます。図では、すべての設備を設定した時点からのホームを高速なゲーム内時間で再現します。完成品は倉庫へ運ばれ（運搬時間は0として扱います）、必要素材が倉庫に揃うと次のレシピが始まります。設備上のリングはバッチの進行を示し、素材待ちの間は琥珀色になります。この配置は段階的に求めた高密度な案であり、最短配置であることを証明したものではありません。',
-  'The layout uses the maximum Storage Units your RV level allows. Farming, gathering/resident facilities, and the combined workshop district each receive one first; extra Storage Units follow the plan\'s hauling demand. Facilities of the same type stay together. Within each zone, busy facilities sit nearest its Storage Unit while environment coverage remains exactly as planned. Hover or tap a facility for its trips and distance. The diagram simulates batches against one shared inventory; carrying time is shown but does not delay production.':'配置にはRVレベルで設置できる最大数の倉庫を使います。まず農林、採集・常駐施設、加工制作地区へ1個ずつ割り当て、残りは計画上の搬送量に応じて配分します。同じ種類の設備はひとまとめにし、各区画では環境範囲を保ちながら稼働の多い設備ほど担当倉庫の近くへ置きます。設備にカーソルを合わせるかタップすると運搬回数と距離を確認できます。図のバッチ計算では全倉庫の在庫を共有し、搬送時間は表示しますが生産の遅延には含めません。',
-  'where \\(s_i\\) is how much of item \\(i\\) is sold per second at price \\(p_i\\), and \\(c_r\\) is a crop\'s seed cost. During the Harvest Moon Festival, season crops\' seeds cost Moonray Wheat instead, which plans take as unlimited. Subject to:':'ここで、\\(s_i\\) はアイテム \\(i\\) の1秒あたりの販売数、\\(p_i\\) は販売価格、\\(c_r\\) は作物レシピの種代です。満月の豊穣祭では、イベント作物の種代は月光の穂で支払い、計画上は月光の穂を無制限に使えるものとして扱います。以下の制約を満たす範囲で最大化します。',
-  'A Cooling Unit is 2×2 tiles, and a Heat Furnace and Sunlamp one tile each; each covers a 9×9 area centered on it. A plot counts as covered if any part of it is inside, and everything snaps to quarter tiles. Every useful way one building can cover a mix of Farmland, Woodland and the rest is worked out once by exact packing; the plan then picks a mode and one of those mixes for each building.':'冷却装置は2×2タイル、加熱炉と太陽灯は各1タイルで、いずれも中心から9×9の範囲を覆います。区画の一部でも範囲内なら、その区画は覆われていると見なします。配置は4分の1タイル単位です。1つの環境設備で畑、林、そのほかの設備を覆う有効な組み合わせを厳密なパッキング計算で求め、計画では各設備のモードと配置を選択します。',
-  'A level-up costs Home Coins \\(C_0\\) plus the materials it asks for, \\(C_1\\) and \\(C_2\\) (raw Wood Blocks and Mineral Sand up to RV 6, a Woodworking Bench item and a Chimney Kiln item from RV 7), and you may already have some of each, \\(S_j\\). The plan finds the most level-ups per day, \\(\\lambda\\), it could keep up, where for Home Coins and each item:':'レベルアップにはホームコイン \\(C_0\\) と指定素材 \\(C_1\\)、\\(C_2\\) が必要です。RV 6までは木材ブロックと鉱砂、RV 7以降は木工台と煙突鍛造炉で作る素材が対象です。それぞれをすでに \\(S_j\\) 個所持している場合もあります。計画では、ホームコインと各素材の条件を満たしながら、1日あたりに継続して達成できるレベルアップ回数 \\(\\lambda\\) を最大化します。',
-  '(\\(\\text{made}_j\\) per second), so the level-up takes \\(1/\\lambda\\) days. Stock of anything lower in a chain (Wood Blocks, Mineral Sand, a lower tier) counts toward what\'s made, since the Bench and Kiln process it up. Two more solves follow, each keeping what the last one found: the most Home Coins at that pace, then as much extra of the level-up items as spare Bench and Kiln time allows. That\'s why ore often finishes before wood and shows up as surplus.':'\\(\\text{made}_j\\) は1秒あたりの生産量なので、レベルアップまでの日数は \\(1/\\lambda\\) です。木工台と煙突鍛造炉で上位素材へ加工できるため、木材ブロック、鉱砂、加工系列の下位素材の在庫も生産済みとして数えます。その後、得られた結果を維持しながら、同じ速度で得られるホームコインを最大化し、さらに木工台と煙突鍛造炉の空き時間で作れるレベルアップ素材の余剰を最大化します。そのため、鉱石が木材より先に揃い、余剰として表示される場合があります。',
-  'The plan solves once per ticked priority, in your order. Each solve makes as much of its priority as it can while keeping at least what the earlier ones reached; a last solve then earns as many Home Coins as all of those leave room for. Aniimo EXP, Aniipods and, during the Harvest Moon Festival, Harvest Moon Points count as their own currencies, so the same model handles them like Home Coins.':'計画は、チェックした優先項目を上から順に1回ずつ求解します。各回では、それ以前の項目で達成した生産量を維持しながら、現在の優先項目を最大化します。最後に、それらを維持したままホームコインを最大限生産します。アニモEXP、アニポッド、満月の豊穣祭中の豊穣祭ポイントは独立した通貨として、ホームコインと同じモデルで扱います。',
-  'Level up gets everything your next RV level costs as soon as possible: its Home Coins plus Wood Blocks and Mineral Sand, or from RV 7 a Woodworking Bench item and a Chimney Kiln item. Under "What you already have", enter what you\'ve got; Wood Blocks, Mineral Sand and lower tiers count too, since the Bench and Kiln process them up. The plan still earns as many Home Coins as it can on the way. In Advanced you can pick which RV level to plan for.':'「レベルアップ」では、次のRVレベルに必要なホームコインと素材を最短で揃えます。RV 6までは木材ブロックと鉱砂、RV 7以降は木工台と煙突鍛造炉で作る素材が対象です。「現在の所持数」に入力した木材ブロック、鉱砂、下位素材も、上位素材へ加工できるため所持分として数えます。素材を揃える途中でも、可能な限りホームコインを獲得します。「詳細」では目標RVレベルを選択できます。',
-  'Priorities ranks what you want: Home Coins, Aniimo EXP (Growth items from the Dance Pad Polisher), Aniipods (the best tier your Aniipod Maker can reach, since a better one catches better), Wood Blocks and Mineral Sand. Switch on the ones you want and drag them into order; the plan makes as much of the first as it can, then as much of the next as that allows, and whatever\'s left goes to Home Coins. The rate card shows each one.':'「優先順位」では、ホームコイン、アニモEXP（ダンスパワーマシンの成長アイテム）、アニポッド（アニポッドメーカーで作れる最高ランク）、木材ブロック、鉱砂に順位を付けます。必要な項目をオンにして並べ替えると、1番目を可能な限り生産し、その量を維持できる範囲で2番目以降も順に最大化します。残った余力はホームコイン生産に使われます。各項目の速度は生産速度カードに表示されます。',
-  'Aniimo Team: which Aniimo to keep on your homeland, for the fastest setup (Best) or the least you can get by with (Minimum). My Aniimo plans with the Aniimo you list instead and shows what each one does. Open it for the full list.':'アニモチーム：ホームに配置するアニモを表示します。「最適」は最速の編成、「最低限」は必要最小限の編成です。「所持アニモ」では登録したアニモを使い、それぞれの担当を表示します。開くと一覧を確認できます。',
-  'Level-Up: how soon you\'ll have everything the level-up costs, and how fast each cost comes in (pick the unit at the top of that column). The slowest one is in bold. Surplus is what\'s left over when it\'s ready, such as extra Home Coins or ore.':'レベルアップ：必要なものがすべて揃うまでの時間と、各素材の生産速度を表示します。速度列の上部で単位を選べます。最も時間がかかるものは太字です。「余剰」は、準備完了時に残るホームコインや鉱石などです。',
-  'Your Rates: with Priorities, what the plan makes of each priority in your order, then Home Coins from what\'s left, per second, minute, hour or day.':'生産速度：「優先順位」で指定した順に各項目の生産速度を表示し、最後に残った余力で得られるホームコインを表示します。単位は毎秒、毎分、毎時、毎日から選べます。',
-  'Seeds to Plant: the seeds your Farmland and Woodland go through and what they cost, in total until the level-up with Level up, or at the chosen rate with Priorities.':'植える種：畑と林で消費する種の数と費用を表示します。「レベルアップ」では準備完了までの合計、「優先順位」では選択した時間単位あたりの値です。',
-  'Profit by Product: with Level up, what each product earns per hour and in total until the level-up is ready.':'製品別利益：「レベルアップ」で、各生産品の1時間あたりの利益と、準備完了までの合計利益を表示します。',
-  'What Each Facility Should Do: what to set each facility to, all running at once. Recipes tagged "unverified" haven\'t been checked in game yet.':'各設備の稼働内容：すべての設備を同時に稼働させる場合に、各設備で何を作るかを表示します。「未確認」のレシピはゲーム内でまだ確認されていません。',
-  'Opportunities: changes within your reach (a recipe to unlock, an Aniimo level, and in Advanced mode a module or facility) ranked by how much they\'d improve the plan.':'改善候補：解放できるレシピ、アニモのレベル、「詳細」モードのモジュールや設備など、実行可能な変更を計画の改善効果が高い順に表示します。',
-  'Homeland Layout: where to put each facility so the busiest are nearest the Storage Unit.':'ホーム配置：稼働率の高い設備ほど倉庫に近くなるよう、各設備の配置場所を表示します。',
-  'Homeland Layout: a readable zoned arrangement around the maximum Storage Units your RV level allows.':'ホーム配置：RVレベルで設置できる最大数の倉庫を使い、設備を用途別の分かりやすい区画に配置します。',
-  'Set a Goal: with Priorities, how long it takes to reach a target amount of Home Coins or any priority that\'s on, and what else you\'ll have by then.':'目標を設定：「優先順位」で有効にした項目またはホームコインについて、目標数に達するまでの時間と、その時点で得られるほかの生産物を表示します。',
-  'Temperatures add where two buildings both reach a plot, capped at -2 and +2, and the game shows the result on the plot itself: Scorching and Cool together read Warm, Warm and Cool read Room temp. Plans use that, so a Heat Furnace on Scorching with four tiles of space to a Cooling Unit on Cool covers three zones at once, Scorching, Warm between them and Cool. Where the second building sits decides the split: every placement whose coverage still overlaps the first is worked out, in a row or on the diagonal, from touching (6 plots, 24 in the middle and 6, for Farmland) out to a corner\'s worth of overlap (22, 10 and 22). Two buildings this close cover fewer plots in total than two standing apart, so a plan only does it when the third zone is worth more. Place the pair exactly as the plan\'s diagram shows, and keep any other building\'s area clear of them.':'2つの環境設備が同じ区画を覆う場合、温度効果は-2から+2の範囲で加算され、その結果が区画上に表示されます。たとえば、灼熱と涼しいを重ねると暖かいに、暖かいと涼しいを重ねると常温になります。計画もこの仕組みを利用します。灼熱に設定した加熱炉と涼しいに設定した冷却装置の間を4タイル空けると、灼熱、その間の暖かい、涼しいという3つの区域を同時に作れます。区域の配分は2つ目の設備を置く位置によって変わるため、1つ目の設備と効果範囲が重なるすべての配置を、直線上と対角線上の両方で計算します。畑の場合、設備同士を接触させる配置では「6区画、中央24区画、6区画」、角だけが重なる配置では「22区画、中央10区画、22区画」になります。設備を近接させると、離して置く場合より覆える総区画数が少なくなるため、3つ目の温度区域による利益がそれを上回る場合にだけ採用されます。設備の組は計画の図と同じ位置に置き、ほかの環境設備の効果範囲が重ならないようにしてください。',
-  '(\\(\\text{made}_j\\) per second), so the level-up takes \\(1/\\lambda\\) days. Stock of anything lower in a chain (Wood Blocks, Mineral Sand, a lower tier) counts toward what\'s made, since the Bench and Kiln process it up. Two more solves follow, each keeping what the last one found: the most coins at that pace, then as much extra of the level-up items as spare Bench and Kiln time allows. That\'s why ore often finishes before wood and shows up as surplus.':'\\(\\text{made}_j\\) は1秒あたりの生産量なので、レベルアップまでの日数は \\(1/\\lambda\\) になります。木工台と煙突鍛造炉で上位素材へ加工できるため、木材ブロック、鉱砂、各加工系列の下位素材の在庫も生産済みの量として数えます。その後、直前に得られた結果を維持しながら、さらに2回求解します。まずそのレベルアップ速度で得られるコインを最大化し、次に木工台と煙突鍛造炉の空き時間で作れるレベルアップ素材の余剰を最大化します。このため、鉱石が木材より先に揃い、余剰として表示されることがあります。',
-  'Aniimo team: which Aniimo to keep on your homeland, for the fastest setup (Best) or the least you can get by with (Minimum). Open it for the full list.':'アニモチーム：ホームランドに配置するアニモを示します。「最適」は最速の編成、「最低限」は必要最小限の編成です。開くと一覧を確認できます。',
-  'Level-up: how soon you\'ll have everything the level-up costs, and how fast each cost comes in (pick the unit at the top of that column). The slowest one is in bold. Surplus is what\'s left over when it\'s ready, such as extra coins or ore.':'レベルアップ：必要なものがすべて揃うまでの時間と、各素材の生産速度を表示します。速度列の上部で単位を選べます。最も時間がかかるものは太字で表示されます。「余剰」は、準備が整った時点で残る追加のコインや鉱石などです。',
-  'Your rates: with Priorities, what the plan makes of each priority in your order, then coins from what\'s left, per second, minute, hour or day.':'生産速度：「優先順位」で指定した順に各項目の生産速度を表示し、最後に残った余力で得られるコインを表示します。単位は毎秒、毎分、毎時、毎日から選べます。',
-  'Seeds to plant: the seeds your Farmland and Woodland go through and what they cost, in total until the level-up with Level up, or at the chosen rate with Priorities.':'植える種：畑と林で消費する種の数と費用を表示します。「レベルアップ」では準備が整うまでの合計、「優先順位」では選択した時間単位あたりの値です。',
-  'Profit by product: with Level up, what each product earns per hour and in total until the level-up is ready.':'製品別利益：「レベルアップ」で、各生産品の1時間あたりの利益と、レベルアップの準備が整うまでの合計利益を表示します。',
-  'What each facility should do: what to set each facility to, all running at once. Recipes tagged "unverified" haven\'t been checked in game yet.':'各設備の稼働内容：すべての設備を同時に稼働させる場合に、各設備で何を作るかを示します。「未確認」と表示されたレシピは、ゲーム内でまだ確認されていません。',
-  'Set a goal: with Priorities, how long it takes to reach a target amount of coins or any priority that\'s on, and what else you\'ll have by then.':'目標を設定：「優先順位」で有効にした項目またはコインについて、目標数に達するまでの時間と、その時点で得られるほかの生産物を表示します。',
-  'Grow time for crops and trees, before watering takes an eighth off it twice. Everything else lists workload: at 100% Efficiency a processor gets through one workload a second, a gathering facility 1.25 on a level-2 recipe and 1.5 on a level-3 one. An Aniimo at the level a recipe needs works at 100%; higher levels are faster, up to level 4 (at a processor, 300% one level above, then +100% per level; at gathering facilities each level adds half a workload a second, reading as +50% on a level-1 recipe, +40% on a level-2 one and +33% on a level-3 one).':'作物と木は、水やりで2回、それぞれ元の時間の8分の1が短縮される前の生育時間を表示します。それ以外は作業量を表示します。効率100%の場合、加工設備は1秒あたり作業量1、採集設備はレベル2レシピで1.25、レベル3レシピで1.5を処理します。レシピの必要レベルと同じアニモは効率100%で働き、レベルが高いほど速くなります（上限はレベル4）。加工設備では必要レベルより1高いと300%、以降は1レベルごとに100%増加します。採集設備では1レベルごとに1秒あたりの作業量が0.5増え、レベル1レシピでは+50%、レベル2では+40%、レベル3では+33%に相当します。',
-  'The lowest ability level that can make this, and the best Aniimo for it: level 4, the top, with the facility\'s personality (+20% speed). For crops and trees, the ability each job needs, in order.':'生産に必要な最低能力レベルと、最適なアニモを表示します。最適なアニモは最高のレベル4で、設備に合う性格による速度+20%を含みます。作物と木については、各作業に必要な能力を作業順に表示します。',
-  'Best puts the best Aniimo you said you have, level 4 or level 3, with the facility\'s personality on every job. Minimum uses the lowest ability level each recipe accepts, with no personality bonus: slower, but it\'s what you need at the very least. An Aniimo is fastest on recipes below its level: a level-4 one works a processor\'s level-1 recipe at 500% and a level-2 one at 400%, but a Well\'s level-1 recipe at 250%. The plan below follows whichever is picked.':'「最適」では、所持していると設定した中で最も優れたAniimo（レベル4またはレベル3）を、各設備と相性のよい性格で配置します。「最低限」では、性格ボーナスを使わず、各レシピを実行できる最低限の能力レベルを採用します。速度は落ちますが、少なくとも必要となる編成です。Aniimoは、自身のレベルを下回るレシピほど素早く処理できます。たとえばレベル4のAniimoは、加工設備のレベル1レシピを500%、レベル2レシピを400%の効率で処理します。一方、井戸のレベル1レシピでは250%です。下の計画には、ここで選択した設定が反映されます。',
-  'Each Aniimo takes on as much as it can: any job needing its ability at or below its level, for as many hours as it has, so long as no two of those facilities want opposite personalities. Work that takes any level, like the Farmland and Woodland jobs, fills whatever time is left over. Facilities with a resident Aniimo (Sandcastle, Dewy House and the like) need one each, and so does each Heat Furnace (Fire), Cooling Unit (Ice) and Sunlamp (Light) in use. An Aniimo carries four personalities at once, one from each opposed pair, shown as letters over its portrait: Instinctive or Energetic (I/E), Nimble or Practical (N/S), Faithful or Tenacious (F/T), Playful or Judicious (P/J). So one can hold the bonus at up to four facilities, never at two wanting opposites, and only while it has hours to spare. The team below is the best combination that allows, and each Aniimo lists every personality it has to have. Whether an environment building\'s Aniimo level or personality matters isn\'t known yet. Each recipe\'s minimum ability level and the Farmland/Woodland jobs haven\'t been checked in game yet.':'各Aniimoには、その能力とレベルで担当できる仕事を、稼働可能な時間の範囲でできるだけ多く割り当てます。ただし、担当する設備同士で必要な性格が正反対になる組み合わせは避けます。畑や林のように任意レベルで担当できる仕事は、残った時間に割り当てられます。常駐Aniimoが必要な設備（Sandcastle、Dewy Houseなど）には1体ずつ必要です。また、使用中のHeat Furnace（火）、Cooling Unit（氷）、Sunlamp（光）にも、それぞれ1体が必要です。1体のAniimoは、対になった4組から1つずつ、合計4つの性格を持ちます。組み合わせは人見知りまたは人懐っこい（I/E）、直感的または現実的（N/S）、心優しいまたは冷酷（F/T）、自由気まままたは従順（P/J）です。そのため、稼働時間に余裕があり、正反対の性格を同時に求められない限り、1体で最大4つの設備のボーナスを維持できます。下のチームは、この条件で可能な最適な組み合わせです。各Aniimoには必要な性格をすべて表示します。環境設備でAniimoのレベルや性格が影響するかどうかは、まだ確認できていません。また、各レシピの最低能力レベルと、畑・林の仕事もゲーム内で未確認です。',
-  'Each row is one product; a facility split between several products gets a row for each. Crops that need a growing environment are grouped by the Heat Furnace, Cooling Unit or Sunlamp setting that covers them, with its layout. Everything else is grouped like the facility list.':'各行は1種類の生産品を表します。1つの設備を複数の生産品に振り分ける場合は、生産品ごとに行を分けて表示します。栽培環境が必要な作物は、その環境を提供するHeat Furnace、Cooling Unit、Sunlampの設定と配置ごとにまとめます。それ以外は設備一覧と同じ区分でまとめます。',
-  'In the Aniimo column, each circle is an ability in its game color with the Aniimo level inside; a ring means the plan counts on the facility\'s personality bonus. Hover a circle for details.':'Aniimo列の各円は能力を表し、ゲーム内と同じ色で、円内にAniimoのレベルを表示します。縁取りのある円は、その設備に対応する性格ボーナスを計画に含めていることを示します。円にカーソルを合わせると詳細を確認できます。',
-  'Theoretical utilization is the share of a facility\'s available processing time used by this steady-state plan. 100% means it is continuously busy; a lower value includes the average time waiting for materials. For a Woodworking Bench or Chimney Kiln alternating recipes, “facility total” is their combined utilization.':'理論稼働率は、定常稼働するこの計画で、設備の処理可能時間のうち実際に使う割合です。100%なら常時稼働し、それ未満なら素材待ちなどで空く時間を平均した値です。複数のレシピを交互に処理する木工台と煙突鍛造炉では、「設備合計」に全レシピを合わせた稼働率を表示します。',
-  'Simple: pick your RV level, and the calculator assumes you\'ve built and upgraded everything that level allows. Advanced: set the count and level of every facility and upgrade module yourself. In Advanced, "Fill from RV level" sets everything to what an RV level allows, as a starting point.':'「かんたん」ではRVレベルを選ぶだけで、そのレベルで建設・強化できるものをすべて揃えているものとして計算します。「詳細」では、各設備と強化モジュールの数やレベルを個別に設定します。「詳細」の「RVレベルから入力」を使うと、指定したRVレベルで利用できる内容を初期値として一括入力できます。',
-  'Under Recipes, special recipes (Rose Shortbread, Potato Kvass and a few others) take a rare currency to unlock, so plans leave them out until you tick the ones you have.':'「レシピ」にある特別レシピ（ローズスコーン、ポテト入りクワスなど）は、解放に希少通貨が必要です。そのため、所持しているものにチェックを入れるまで、計画では使用されません。',
-  'Also under Recipes, add anything you can\'t make yet, such as recipes behind unlocks you don\'t have. Plans won\'t use them. The ✕ next to a product in a plan skips it and plans again.':'同じく「レシピ」では、まだ解放していないなどの理由で作れないレシピを追加できます。追加したレシピは計画で使用されません。計画内の生産品の横にある✕を押して除外し、再計算することもできます。',
-  'Click "Find the best plan" to see how long the level-up takes (or your best rate) and what each facility should make. Set it up once and leave it running. Everything you enter is saved in your browser; "Clear saved values" resets it.':'「最適プランを検索」を押すと、レベルアップまでの時間（または最大の生産速度）と、各設備で作るものが表示されます。一度設定したら、そのまま稼働させてください。入力内容はすべてブラウザに保存されます。「保存値を消去」を押すと初期状態に戻せます。',
-  'Pick what you\'re aiming for, enter the target amount and what you have now, and the card says how long it takes and what else you\'ll have by then. It updates instantly as you type.':'目標とするものを選び、目標数と現在の所持数を入力すると、達成までの時間と、その時点で得られるほかの生産物が表示されます。入力中も結果は即座に更新されます。',
-  'Every plan is one mixed-integer program covering every recipe and facility at once, solved with HiGHS. Each recipe your facility levels and modules unlock, \\(r\\), gets a rate \\(b_r\\) (batches per second) and a whole number of units \\(u_r\\) set to it: plots for a crop, machines for a processed item.':'各計画は、すべてのレシピと設備を一度に扱う1つの混合整数計画問題として構成され、HiGHSで求解されます。設備レベルとモジュールによって解放されている各レシピ \\(r\\) には、処理速度 \\(b_r\\)（1秒あたりのバッチ数）と、そのレシピに割り当てる整数の設備数 \\(u_r\\) が設定されます。作物の場合は区画数、加工品の場合は機械数を表します。',
-  'where \\(s_i\\) is how much of item \\(i\\) is sold per second at price \\(p_i\\), and \\(c_r\\) is a crop\'s seed cost. Subject to:':'ここで、\\(s_i\\) はアイテム \\(i\\) の1秒あたりの販売数、\\(p_i\\) はその販売価格、\\(c_r\\) は作物レシピ \\(r\\) の種代です。以下の制約を満たす範囲で最大化します。',
-  'HiGHS proves the plan is the best possible. On the rare setup where that takes longer than 30 seconds, it stops with the best plan so far and the results say how far from the best it could be. Every plan is then re-checked on its own before it\'s shown.':'HiGHSは、得られた計画が最適であることも証明します。まれに証明に30秒以上かかる設定では、その時点で得られている最良の計画を採用し、理論上の最適値との差が最大でどの程度あり得るかを結果に表示します。また、表示前に各計画を個別に再検証します。',
-  'Crops and trees take their grow time, less the Aniimo\'s watering: a plot asks for water twice as it grows, at two thirds and at one third of its time left, and each watering takes an eighth of the crop\'s own time off. A 40-minute crop comes in at 30 and a 4-minute one at 3. A crop short of its environment grows slower but still loses the same minutes, so a Warm crop with no building takes 50 minutes and is watered down to 40; that part isn\'t checked in game yet.':'作物と木の所要時間は、基本の生育時間からAniimoの水やりによる短縮分を差し引いて計算します。区画には、生育時間が3分の2と3分の1残った時点で計2回の水やりが必要で、1回につきその作物本来の生育時間の8分の1が短縮されます。40分の作物は30分、4分の作物は3分で育ちます。必要な環境が不足している作物は生育が遅くなりますが、水やりで短縮される分数は変わりません。そのため、暖かい環境が必要な作物を環境設備なしで育てる場合、基本時間は50分に延び、水やり後は40分になります。この挙動はゲーム内でまだ確認されていません。',
-  'Everything else has a workload, and how long it takes depends on the Aniimo\'s Efficiency \\(e\\), which the facility screen shows, and a base rate \\(r\\):':'それ以外の生産には作業量が設定されており、所要時間は設備画面に表示されるAniimoの効率 \\(e\\) と基本速度 \\(r\\) によって決まります。',
-  'At a processor, \\(r\\) is one workload a second. At a gathering facility (Well, Mine, Sandcastle, Dewy House and the like) and at the Dance Pad Polisher and Aniipod Maker, it\'s higher on recipes needing a higher ability level: 1 a second at level 1, 1.25 at level 2 and 1.5 at level 3. A Growth Fruit, 5,400 workload, takes an hour at 100%.':'加工設備では、\\(r\\) は1秒あたり作業量1です。採集設備（井戸、鉱山、Sandcastle、Dewy Houseなど）、ダンスパワーマシン、Aniipod Makerでは、必要能力レベルが高いレシピほど基本速度が上がり、レベル1は毎秒1、レベル2は毎秒1.25、レベル3は毎秒1.5です。作業量5,400の成長の実は、効率100%なら1時間かかります。',
-  'Efficiency \\(e\\) depends on the Aniimo\'s ability level compared with the level the recipe needs. At exactly the needed level it\'s 100%. At a processor, one level above the recipe\'s need is 300%, and each level after that adds 100% (400%, 500%). At a gathering facility, each level above adds half a workload a second, whatever the recipe needs, so against the recipe\'s own base rate that reads as +50% a level on a level-1 recipe, +40% on a level-2 one and +33% on a level-3 one. The Dance Pad Polisher and Aniipod Maker add 40% a level. The personality term counts only when the Aniimo has the facility\'s personality (+20%); the Polisher and Aniipod Maker have none. Ability levels stop at 4.':'効率 \\(e\\) は、Aniimoの能力レベルとレシピの必要レベルの差で決まります。必要レベルと同じ場合は100%です。加工設備では、必要レベルより1高いと300%になり、それ以降は1レベルごとに100%ずつ増えます（400%、500%）。採集設備では、レシピの必要レベルにかかわらず、1レベル上がるごとに1秒あたりの作業量が0.5増えます。レシピ本来の基本速度に対する増加率では、レベル1レシピが1レベルにつき+50%、レベル2が+40%、レベル3が+33%です。ダンスパワーマシンとAniipod Makerは1レベルにつき40%増えます。性格による項は、Aniimoが設備に対応する性格を持つ場合だけ適用され、速度が20%上がります。両設備には対応する性格がありません。能力レベルの上限は4です。',
-  'Environments are steps of temperature: Freeze -2, Cool -1, no building 0, Warm +1, Scorching +2. A crop grows at 100% at its own, 80% one step away, 50% two steps and 20% beyond that. An uncovered plot is neutral, so a Cool or Warm crop still manages 80% and a Freeze or Scorching one 50%, which is why plans sometimes grow them with no building at all. Adequate is separate: those crops need a Sunlamp. Efficiency stretches the grow time, so a Rose at 80% takes 50m instead of 40m for the same 8 roses, before watering.':'栽培環境は温度の段階として扱います。極寒は-2、涼しいは-1、環境設備なしは0、暖かいは+1、灼熱は+2です。作物は適した温度では100%の速度で育ち、1段階ずれると80%、2段階ずれると50%、それ以上ずれると20%になります。設備のない区画は中立温度なので、涼しいまたは暖かい環境の作物は80%、極寒または灼熱の作物は50%で育ちます。そのため、計画によっては環境設備を使わずに栽培する場合があります。適温は別枠で、この環境を必要とする作物にはSunlampが必須です。効率低下は生育時間を引き延ばします。たとえばバラは、効率80%では同じ8個を収穫するのに40分ではなく50分かかります（水やりによる短縮前）。',
-  'Each Heat Furnace, Cooling Unit and Sunlamp is 2×2 tiles and covers a 9×9 area centered on it. A plot counts as covered if any part of it is inside, and everything snaps to quarter tiles. Every useful way one building can cover a mix of Farmland, Woodland and the rest is worked out once by exact packing; the plan then picks a mode and one of those mixes for each building.':'Heat Furnace、Cooling Unit、Sunlampはいずれも2×2タイルで、中心から9×9の範囲を覆います。区画の一部でも範囲内に入っていれば、その区画は覆われていると見なされます。配置は4分の1タイル単位で揃います。1つの環境設備の範囲に畑、林、そのほかの設備を組み合わせて配置する有効な方法は、厳密なパッキング計算によって事前にすべて求められます。計画では、各環境設備についてモードと配置の組み合わせを選択します。',
-  'Whole units. \\(b_r \\, t_r \\le u_r\\), with \\(u_r\\) a whole number and \\(t_r\\) the time per batch. A unit runs one recipe and is left running.':'設備数は整数です。\\(b_r \\, t_r \\le u_r\\) を満たし、\\(u_r\\) は整数、\\(t_r\\) は1バッチの所要時間です。1つの設備では1種類のレシピを継続して実行します。',
-  'Item balance. Everything made covers what other recipes use plus what\'s sold. A quick variant makes the same item as the regular one.':'アイテムの収支を一致させます。生産量は、ほかのレシピで消費する量と販売する量の合計を満たす必要があります。高速版は通常版と同じアイテムを生産するものとして扱います。',
-  'What you own. For every facility and level \\(L\\), the units on recipes needing level \\(L\\) or higher add up to at most what you own at that level. A higher-level plot can run a lower-level recipe.':'所有設備の範囲内で計算します。各設備のレベル \\(L\\) について、レベル \\(L\\) 以上を必要とするレシピに割り当てる設備数の合計は、そのレベルで所有している設備数を超えません。高レベルの区画では、低レベルのレシピも実行できます。',
-  'Growing environments. A crop wanting Cool, Warm, Freeze or Scorching grows at full speed on a plot covered by a Heat Furnace or Cooling Unit set to that mode, and more slowly on an uncovered one (see below). An Adequate crop needs a Sunlamp and grows nowhere else.':'栽培環境を考慮します。涼しい、暖かい、極寒、灼熱を必要とする作物は、そのモードに設定したHeat FurnaceまたはCooling Unitの範囲内では通常速度で育ち、範囲外では速度が低下します。適温を必要とする作物はSunlampがなければ育ちません。',
-  'Level up gets everything your next RV level costs as soon as possible: its coins plus Wood Blocks and Mineral Sand, or from RV 7 a Woodworking Bench item and a Chimney Kiln item. Under "What you already have", enter what you\'ve got; Wood Blocks, Mineral Sand and lower tiers count too, since the Bench and Kiln process them up. The plan still earns as many coins as it can on the way. In Advanced you can pick which RV level to plan for.':'「レベルアップ」では、次のRVレベルに必要なものを最短で揃えます。必要なコインに加え、RV 6までは木材ブロックと鉱砂、RV 7以降は木工台と煙突鍛造炉で作るアイテムが対象です。「現在の所持数」に現在の数を入力してください。下位素材も上位素材へ加工できるため所持分として計算されます。必要素材を揃えるまでの間も、可能な限り多くのコインを獲得します。「詳細」では目標RVレベルを選択できます。',
-  'Priorities ranks what you want: coins, Aniimo EXP (Growth items from the Dance Pad Polisher), Aniipods (the best tier your Aniipod Maker can reach, since a better one catches better), Wood Blocks and Mineral Sand. Switch on the ones you want and drag them into order; the plan makes as much of the first as it can, then as much of the next as that allows, and whatever\'s left goes to coins. The rate card shows each one.':'「優先順位」では、コイン、アニモEXP（ダンスパワーマシンで作る成長アイテム）、アニポッド（Aniipod Makerで作れる最高ランク）、木材ブロック、鉱砂に優先順位を付けます。作りたいものをオンにし、ドラッグして順番を並べ替えてください。計画は1番目を可能な限り多く生産し、その条件を保ったまま2番目以降も順に最大化します。残った余力はコイン生産に使われます。各項目の生産速度は速度カードに表示されます。',
-  'A level-up costs coins \\(C_0\\) plus the materials it asks for, \\(C_1\\) and \\(C_2\\) (raw Wood Blocks and Mineral Sand up to RV 6, a Woodworking Bench item and a Chimney Kiln item from RV 7), and you may already have some of each, \\(S_j\\). The plan finds the most level-ups per day, \\(\\lambda\\), it could keep up, where for coins and each item:':'レベルアップにはコイン \\(C_0\\) と、指定された2種類の素材 \\(C_1\\)、\\(C_2\\) が必要です。RV 6までは木材ブロックと鉱砂、RV 7以降は木工台と煙突鍛造炉で作るアイテムが対象です。それぞれをすでに \\(S_j\\) 個所持している場合もあります。計画では、コインと各素材について条件を満たしながら、1日あたりに継続して達成できるレベルアップ回数 \\(\\lambda\\) を最大化します。',
-  'Each tier takes 8 of the tier below (4 for the last), so the Bench and Kiln switch between tiers rather than running one recipe like other processors.':'各段階への加工には1つ下の素材が8個必要です（最終段階のみ4個）。そのため木工台と煙突鍛造炉は、ほかの加工設備のように1種類のレシピだけを続けるのではなく、複数の加工段階を切り替えながら稼働します。',
-  'The plan solves once per ticked priority, in your order. Each solve makes as much of its priority as it can while keeping at least what the earlier ones reached; a last solve then earns as many coins as all of those leave room for. Aniimo EXP and Aniipods count as their own currencies, so the same model handles them like coins.':'計画は、チェックされた優先項目を上から順に1回ずつ求解します。各回では、それより前の項目で達成した生産量を維持しながら、現在の優先項目の生産量を最大化します。最後に、それらすべてを維持したままコインを最大限生産する求解を行います。Aniimo EXPとAniipodは独立した通貨として数えるため、コインと同じモデルで扱えます。',
-  'Each product starts adding up once its first batch clears its ingredient chain (its lead time), then keeps its steady rate:':'各生産品は、原料の加工経路をたどって最初のバッチが完成するまでの時間（リードタイム）が過ぎてから増え始め、その後は一定の速度で蓄積します。',
-  'This only ever grows with \\(t\\), so the time to reach a target is found by binary search.':'この値は時間とともに減ることがないため、目標数に達する時刻は二分探索で求められます。',
-  'If the exact planner can\'t run (rare; reloading the page usually fixes it), an older planner steps in. It solves the same problem as a continuous linear program, rounds to whole plots and one recipe per machine, then re-solves. Its plans are usually close to the best but not guaranteed, and the results say when it was used.':'厳密なプランナーを実行できない場合（まれに発生しますが、通常はページを再読み込みすると解消します）は、旧式の代替プランナーが使用されます。代替プランナーは同じ問題を連続線形計画問題として解き、区画数を整数に丸め、各機械に1種類のレシピを割り当てたうえで再求解します。多くの場合、最適解に近い計画が得られますが、最適である保証はありません。代替プランナーが使用された場合は結果に表示されます。'
-};
-
-const pretty = id => id.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-const replacements = new Map([...Object.entries(longForm), ...Object.entries(ui), ...Object.entries(dynamic), ...Object.entries(names), ...Object.entries(itemAliases), ...Object.entries(items).map(([id, ja]) => [pretty(id), ja])]);
-const ordered = [...replacements.entries()].sort((a, b) => b[0].length - a[0].length);
-const localizeKnownNames = value => {
-  let result = value;
-  [...Object.entries(names), ['Aniimo', 'アニモ'], ['Aniipods', 'アニポッド'], ['Aniipod', 'アニポッド']]
-    .sort((a, b) => b[0].length - a[0].length)
-    .forEach(([en, ja]) => { result = result.replaceAll(en, ja); });
-  return result;
-};
-
-function translateText(value) {
-  if (!value || !/[A-Za-z]/.test(value)) return value;
-  const leading = value.match(/^\s*/)[0];
-  const trailing = value.match(/\s*$/)[0];
-  let text = value.trim();
-  const exact = replacements.get(text);
-  if (exact) return leading + localizeKnownNames(exact) + trailing;
-  for (const [en, ja] of ordered) {
-    if (en.length < 4) continue;
-    const escaped = en.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    text = text.replace(new RegExp(`(?<![A-Za-z])${escaped}(?![A-Za-z])`, 'g'), ja);
-  }
-  text = text
-    .replace(/^(\d+) facilities and 4 modules at RV (\d+)$/, 'RV $2：設備$1種・モジュール4種')
-    .replace(/^(\d+) facilities$/, '設備$1種')
-    .replace(/^(\d+) on$/, '$1件有効')
-    .replace(/^(\d+) skipped$/, '$1件除外')
-    .replace(/^Target (.+)$/, '$1の目標')
-    .replace(/^Current (.+)$/, '現在の$1')
-    .replace(/^(.+) produced$/, '$1の生産量')
-    .replace(/^Opened saved result: (.+)$/, '保存結果を開きました：$1')
-    .replace(/^(\d+) Aniimo × 10 Energy\/minute: (.+) Energy\/day\.$/, '$1体のアニモ × 毎分10 Energy：1日$2 Energy。')
-    .replace(/^(.+) only$/, '$1限定')
-    .replace(/^(\d+(?:\.\d+)?) trips\/hour to the 倉庫, (\d+(?:\.\d+)?) tiles each on average, in the (\d+) plots? open at RV (\d+)\.$/, 'RV $4で使用可能な$3区画に配置。倉庫まで毎時$1回運搬し、平均距離は$2タイルです。')
-    .replace(/^(\d+(?:\.\d+)?) trips\/hour to (\d+) 倉庫, (\d+(?:\.\d+)?) tiles each on average, in the (\d+) plots? open at RV (\d+)\.$/, 'RV $5で使用可能な$4区画に配置。倉庫$2個へ毎時$1回運搬し、平均距離は$3タイルです。')
-    .replace(/^No room found in RV (\d+)'s plots for: (.+)\.$/, 'RV $1の区画に配置スペースがありません：$2。')
-    .replace(/^Not placed, size unknown: (.+)\.$/, '大きさが不明なため未配置：$1。')
-    .replace(/^in (.+)$/, '$1後')
-    .replace(/^Backup planner, trial (\d+)…?$/, '予備プランナー：試行$1…')
-    .replace(/^In a row, (\d+) tiles? between them\.$/, '横一列に、間を$1タイル空けます。')
-    .replace(/^Corner to corner, the second sits (\d+) tiles? along and (\d+) tiles? up from the first\.$/, '角を基準に、2つ目を1つ目から横$1タイル・上$2タイルに配置します。')
-    .replace(/^That\'s (\d+) Aniimo\.$/, '合計$1体のアニモが必要です。')
-    .replace(/^That\'s (\d+) Aniimo; an RV level (\d+) homeland holds (\d+)\.$/, '合計$1体です。RVレベル$2のホームには$3体まで配置できます。')
-    .replace(/^That\'s (\d+) Aniimo, more than the (\d+) an RV level (\d+) homeland holds\.$/, '合計$1体で、RVレベル$3の配置上限$2体を超えています。')
-    .replace(/^(\d+) Aniimo · your homeland holds (\d+)( \(too many; see the list\))?$/, (_, need, cap, over) => `${need}体のアニモ・配置上限${cap}体${over ? '（上限超過・一覧を確認）' : ''}`)
-    .replace(/^(\d+) Aniimo$/, '$1体のアニモ')
-    .replace(/^(.+) \(\+20% speed\)$/, '$1（速度+20%）')
-    .replace(/^Move (.+) up$/, '$1を上へ移動')
-    .replace(/^Move (.+) down$/, '$1を下へ移動')
-    .replace(/^Stop skipping (.+)$/, '$1の除外を解除')
-    .replace(/^Skip (.+) and plan again$/, '$1を除外して再計算')
-    .replace(/^RV (\d+) level-up$/, 'RV $1レベルアップ')
-    .replace(/^RV (\d+) costs$/, 'RV $1の必要素材')
-    .replace(/^RV (\d+) normally holds (\d+) orders\. You can add up to (\d+) slots\.$/, 'RV $1の通常上限は$2枠です。手動で最大$3枠まで追加できます。')
-    .replace(/^(\d+) total$/, '合計$1台')
-    .replace(/^Clear order (\d+)$/, '注文$1を消去')
-    .replace(/^Move order (\d+) up$/, '注文$1を上へ移動')
-    .replace(/^Move order (\d+) down$/, '注文$1を下へ移動')
-    .replace(/^Orders ready in (.+)$/, '注文品を$1後に用意')
-    .replace(/^([−~\d].+) order completion \((.+)\)$/, '$1 注文完了（$2）')
-    .replace(/^Best plan found in the time allowed; the best possible is at most ([\d.]+)% higher\.$/, '制限時間内で見つかった最良の計画です。理論上の最良値は最大$1%高い可能性があります。')
-    .replace(/^(\d+) recipes? in this plan (?:hasn\'t|haven\'t) been checked in game yet \(tagged below\)\. If any of those numbers are off, so is this plan\.$/, 'この計画にはゲーム内未確認のレシピが$1件あります（下に表示）。数値が異なる場合、計画結果も変わります。')
-    .replace(/^Skipping (.+)\.$/, '除外中：$1。')
-    .replace(/^Plan calculation failed: (.+)$/, '計画の計算に失敗しました：$1')
-    .replace(/^The exact planner couldn\'t run(?: \((.+)\))?, so this plan comes from the backup planner and may not be the very best\. Reloading the page usually fixes this\.$/, (_, reason) => `厳密プランナーを実行できなかったため${reason ? `（${reason}）` : ''}、予備プランナーの計画を表示しています。最適解とは限りません。通常はページを再読み込みすると解消します。`)
-    .replace(/^Used for ([^;]+); the rest sells directly$/, '$1に使用し、残りは直接売却')
-    .replace(/^Used for ([^;]+); the rest goes to the level-up$/, '$1に使用し、残りはレベルアップ用')
-    .replace(/^Used for ([^;]+)/, '$1に使用')
-    .replace(/\(needs ([^)]+)\)/g, '（$1が必要）')
-    .replace(/; takes turns with ([^;]+)/, '（$1と交互に生産）')
-    .replace(/; grown without ([^;]+) at ([\d.]+)% speed$/, '（$1なし・速度$2%で栽培）')
-    .replace(/畑 and 林/g, '畑と林')
-    .replace(/Aniimo/g, 'アニモ')
-    .replace(/Aniipods?/g, 'アニポッド');
-  return leading + text + trailing;
-}
-
-function translateElement(root) {
-  if (root.nodeType === Node.TEXT_NODE) {
-    if (!root.parentElement?.closest('script, style, .math-block')) root.nodeValue = translateText(root.nodeValue);
-    return;
-  }
-  if (!(root instanceof Element) && root !== document) return;
-  // Paragraphs and list items can be split into several text nodes by emphasis and links.
-  // Match their complete visible text before walking individual nodes so long-form translations
-  // are not skipped merely because the English contains inline markup.
-  root.querySelectorAll?.('p, li').forEach(el => {
-    const complete = el.textContent.trim();
-    const translated = replacements.get(complete);
-    if (translated) el.textContent = localizeKnownNames(translated);
-  });
-  if (root instanceof Element) {
-    for (const attr of ['title', 'placeholder', 'aria-label', 'data-tooltip', 'data-label']) {
-      if (root.hasAttribute(attr)) root.setAttribute(attr, translateText(root.getAttribute(attr)));
+async function load(code) {
+    if (code === 'ja') return;
+    if (!catalogs[code]) {
+        const response = await fetch(new URL(`./locales/${code}.json`, import.meta.url));
+        if (!response.ok) throw new Error(`Could not load ${code} translations`);
+        catalogs[code] = await response.json();
+        templates[code] = Object.entries(catalogs[code])
+            .filter(([source, target]) => /\{[a-z_]+\}/i.test(source) && /\{[a-z_]+\}/i.test(target))
+            .sort(([left], [right]) => right.length - left.length)
+            .map(([source, target]) => {
+                const slots = [...source.matchAll(/\{[a-z_]+\}/gi)].map(match => match[0]);
+                const parts = source.split(/\{[a-z_]+\}/gi);
+                const pattern = parts.map((part, i) => escapeRegExp(part) + (i < slots.length
+                    ? (/^\{(?:days|hours|minutes|seconds|n|level|trips|distance|plots)\}$/.test(slots[i])
+                        ? '([0-9][0-9.,\\s]*)' : '(.+?)')
+                    : '')).join('');
+                return { pattern: new RegExp(`^${pattern}$`), slots, target };
+            });
     }
-  }
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  while (walker.nextNode()) translateElement(walker.currentNode);
-  root.querySelectorAll?.('[title],[placeholder],[aria-label],[data-tooltip],[data-label]').forEach(el => {
-    for (const attr of ['title', 'placeholder', 'aria-label', 'data-tooltip', 'data-label']) {
-      if (el.hasAttribute(attr)) el.setAttribute(attr, translateText(el.getAttribute(attr)));
+}
+
+const textSources = new WeakMap();
+const attributeSources = new WeakMap();
+const attributes = ['title', 'aria-label', 'aria-description', 'placeholder', 'data-label', 'data-tooltip', 'data-tip', 'data-tip-detail', 'data-tip-stats', 'data-tip-text'];
+
+export function translate(value) {
+    if (language === 'en' || !value) return value;
+    if (language === 'ja') return translateJapanese(value);
+    if (language === 'zh-TW') return (translateZhTw ??= createZhTwTranslator(catalogs['zh-TW']))(value);
+    const phrases = catalogs[language];
+    const trimmed = value.trim();
+    const translated = phrases[trimmed];
+    if (translated) return value.replace(trimmed, translated);
+    // Dynamic labels keep their values while the source sentence remains translatable.
+    for (const { pattern, slots, target } of templates[language] || []) {
+        const match = trimmed.match(pattern);
+        if (!match) continue;
+        let result = target;
+        slots.forEach((slot, i) => {
+            const captured = match[i + 1];
+            const whole = captured === trimmed ? captured : translate(captured);
+            const value = whole === captured ? captured.split(', ').map(part => part === trimmed ? part : translate(part)).join(', ') : whole;
+            result = result.replace(slot, value);
+        });
+        return value.replace(trimmed, result);
     }
-  });
+    if (trimmed.includes('; ')) {
+        const parts = trimmed.split('; ');
+        const localized = parts.map(part => translate(part));
+        if (localized.some((part, i) => part !== parts[i])) return value.replace(trimmed, localized.join('; '));
+    }
+    if (trimmed.includes('. ')) {
+        const parts = trimmed.split('. ');
+        const localized = parts.map((part, i) => translate(part + (i < parts.length - 1 ? '.' : '')));
+        if (localized.some((part, i) => part !== parts[i] + (i < parts.length - 1 ? '.' : ''))) {
+            return value.replace(trimmed, localized.join(' '));
+        }
+    }
+    return value;
 }
 
-function configureToggle() {
-  const button = document.getElementById('languageToggle');
-  if (!button) return;
-  button.textContent = language === 'ja' ? 'English' : '日本語';
-  button.setAttribute('aria-label', language === 'ja' ? 'Switch to English' : '日本語に切り替え');
-  button.addEventListener('click', () => {
-    localStorage.setItem(LANGUAGE_KEY, language === 'ja' ? 'en' : 'ja');
-    window.location.reload();
-  });
+// Traditional Chinese (zh-TW) rules. translate() uses them only for zh-TW, so the other languages keep
+// the rules above. They differ from those rules:
+// - An unknown phrase is split at line breaks, ' · ' and ', ' as well, and list items join with '、'.
+// - A template with more fixed text is tried first.
+// - A text slot holds whole brackets and no slot break, so "A (x), B (y)" is not "{name} ({detail})".
+// Text that the zh-TW catalog does not hold, for example new English text, stays in English.
+const ZH_TW_SLOT = /\{[a-z_]+\}/gi;
+const ZH_TW_NUMBER_SLOT = /^\{(?:days|hours|minutes|seconds|n|level|trips|distance|plots)\}$/;
+const ZH_TW_SEPARATORS = ['\n', ' · ', '; ', '. ', ', '];
+const ZH_TW_JOINERS = { '. ': '', '; ': '；', ', ': '、' };
+// A text slot never holds one of these, unless the fixed text of its template holds it.
+const ZH_TW_SLOT_BREAKS = ['\n', ' · ', '; '];
+
+/** Gives a function that translates English text with the zh-TW `catalog`. */
+export function createZhTwTranslator(catalog) {
+    const zhTemplates = zhTwBuildTemplates(catalog);
+
+    function translateText(value) {
+        if (!value) return value;
+        const trimmed = value.trim();
+        const translated = Object.hasOwn(catalog, trimmed) ? catalog[trimmed] : '';
+        const result = translated || fillTemplate(trimmed) || translateParts(trimmed);
+        return result ? value.replace(trimmed, () => result) : value;
+    }
+
+    // Fills the first template that matches. Returns null when none matches.
+    function fillTemplate(trimmed) {
+        for (const template of zhTemplates) {
+            const match = trimmed.match(template.pattern);
+            if (!match) continue;
+            if (!template.textSlots.every((text, i) => !text || zhTwFits(match[i + 1], template.breaks))) continue;
+            let result = template.target;
+            template.slots.forEach((slot, i) => {
+                const captured = match[i + 1];
+                const whole = captured === trimmed ? captured : translateText(captured);
+                const value = whole === captured ? captured.split(', ').map(part => part === trimmed ? part : translateText(part)).join(', ') : whole;
+                result = result.replace(slot, () => value);
+            });
+            return result;
+        }
+        return null;
+    }
+
+    // Translates each part between the first separator that changes a part. Returns null when none does.
+    function translateParts(text) {
+        for (const separator of ZH_TW_SEPARATORS) {
+            if (!text.includes(separator)) continue;
+            const parts = text.split(separator);
+            // A sentence keeps its full stop, so the catalog entry for it still matches.
+            const sources = separator === '. ' ? parts.map((part, i) => part + (i < parts.length - 1 ? '.' : '')) : parts;
+            const localized = sources.map(part => translateText(part));
+            if (localized.every((part, i) => part === sources[i])) continue;
+            return localized.join(ZH_TW_JOINERS[separator] ?? separator);
+        }
+        return null;
+    }
+
+    return translateText;
 }
 
-// Dynamic controls such as the recipe-search datalist need their display labels before they are
-// inserted into the DOM. The English data and recipe IDs remain unchanged.
-window.aniimaxTranslate = language === 'ja' ? translateText : value => value;
-
-configureToggle();
-if (language === 'ja') {
-  document.documentElement.lang = 'ja';
-  document.title = 'Aniimax - アニモ生産最適化ツール';
-  translateElement(document.body);
-  new MutationObserver(records => records.forEach(record => record.addedNodes.forEach(translateElement)))
-    .observe(document.body, { childList: true, subtree: true });
+function zhTwBuildTemplates(catalog) {
+    return Object.entries(catalog)
+        .filter(([source, target]) => /\{[a-z_]+\}/i.test(source) && /\{[a-z_]+\}/i.test(target))
+        // A template with more fixed text is more specific, so it comes first.
+        .sort(([left], [right]) => zhTwLiteralLength(right) - zhTwLiteralLength(left) || right.length - left.length)
+        .map(([source, target]) => {
+            const slots = [...source.matchAll(ZH_TW_SLOT)].map(match => match[0]);
+            const parts = source.split(ZH_TW_SLOT);
+            const pattern = parts.map((part, i) => escapeRegExp(part) + (i < slots.length
+                ? (ZH_TW_NUMBER_SLOT.test(slots[i]) ? '([0-9][0-9.,\\s]*)' : '(.+?)')
+                : '')).join('');
+            const textSlots = slots.map(slot => !ZH_TW_NUMBER_SLOT.test(slot));
+            // A separator in the fixed text, as in "{ability} Lv.{level} · {detail}", lets its slot hold one.
+            const breaks = ZH_TW_SLOT_BREAKS.filter(separator => !source.includes(separator));
+            return { pattern: new RegExp(`^${pattern}$`), slots, textSlots, breaks, target };
+        });
 }
+
+// A text slot holds whole brackets and no slot break.
+function zhTwFits(text, breaks) {
+    return zhTwBalanced(text) && !breaks.some(separator => text.includes(separator));
+}
+
+function zhTwBalanced(text) {
+    let depth = 0;
+    for (const char of text) {
+        if (char === '(') depth += 1;
+        else if (char === ')' && --depth < 0) return false;
+    }
+    return depth === 0;
+}
+
+function zhTwLiteralLength(source) {
+    return source.replace(ZH_TW_SLOT, '').length;
+}
+
+export function currentLocale() {
+    if (language === 'zh-TW') return 'zh-TW';
+    if (language === 'ja') return 'ja-JP';
+    return language === 'ru' ? 'ru-RU' : 'en-US';
+}
+
+function escapeRegExp(text) {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function updateText(node) {
+    const previous = textSources.get(node);
+    if (previous?.shown === node.nodeValue) {
+        if (language === previous.language) return;
+    }
+    const source = previous?.shown === node.nodeValue ? previous.source : node.nodeValue;
+    const shown = translate(source);
+    textSources.set(node, { source, shown, language });
+    if (shown !== node.nodeValue) node.nodeValue = shown;
+}
+
+function updateAttributes(element) {
+    let sources = attributeSources.get(element);
+    if (!sources) { sources = new Map(); attributeSources.set(element, sources); }
+    for (const name of attributes) {
+        if (!element.hasAttribute(name)) continue;
+        const current = element.getAttribute(name);
+        const previous = sources.get(name);
+        if (previous?.shown === current && previous.language === language) continue;
+        const source = previous?.shown === current ? previous.source : current;
+        const shown = translate(source);
+        sources.set(name, { source, shown, language });
+        if (shown !== current) element.setAttribute(name, shown);
+    }
+}
+
+export function sourceAttribute(element, name) {
+    const current = element.getAttribute(name);
+    const previous = attributeSources.get(element)?.get(name);
+    return previous?.shown === current ? previous.source : current;
+}
+
+// Translates `root` and everything in it now, without waiting for the MutationObserver.
+export function translateTree(root) {
+    update(root);
+}
+
+function update(root) {
+    if (root.nodeType === Node.TEXT_NODE) return updateText(root);
+    if (root.nodeType !== Node.ELEMENT_NODE) return;
+    updateAttributes(root);
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+        if (walker.currentNode.nodeType === Node.TEXT_NODE) updateText(walker.currentNode);
+        else updateAttributes(walker.currentNode);
+    }
+}
+
+const selector = document.getElementById('language-switch');
+for (const [code, name] of Object.entries(languages)) selector.add(new Option(name, code));
+selector.value = preferredLanguage;
+document.documentElement.lang = language;
+document.title = translate('Aniimax - Aniimo Production Optimizer');
+update(document.body);
+let languageRequest = 0;
+async function selectLanguage(code) {
+    const request = ++languageRequest;
+    try { await load(code); } catch (error) {
+        console.warn(error);
+        if (request === languageRequest) selector.value = language;
+        return;
+    }
+    if (request !== languageRequest) return;
+    language = code;
+    try { localStorage.setItem('aniimax-language', language); } catch (_) { /* Language still changes for this tab. */ }
+    document.documentElement.lang = language;
+    document.title = translate('Aniimax - Aniimo Production Optimizer');
+    update(document.body);
+    document.dispatchEvent(new Event('aniimax-language-change'));
+}
+selector.addEventListener('change', () => selectLanguage(selector.value));
+
+new MutationObserver(records => {
+    for (const record of records) {
+        if (record.type === 'characterData') updateText(record.target);
+        else if (record.type === 'attributes') updateAttributes(record.target);
+        else record.addedNodes.forEach(update);
+    }
+}).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: attributes });
+
+export const languageReady = selectLanguage(preferredLanguage);

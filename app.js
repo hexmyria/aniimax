@@ -1,11 +1,15 @@
 // Aniimax Web Application
 
+import { currentLocale, sourceAttribute, translate } from './i18n.js';
+import './math-translation.js';
+
 import {
     FACILITIES, FACILITY_CATEGORIES, FACILITY_CATEGORY_BY_NAME, FACILITY_FOOTPRINTS, HOMELAND_PLOTS, HOMELAND_PLOT_SIZE,
     MAX_HOME_LEVEL, ANIIMO_MAX, STORAGE_UNIT_MAX, simpleSetup,
     LEVEL_UP_COSTS, LEVEL_UP_CHAINS, SPECIAL_RECIPES, SEASON, ANIIPOD_TIERS, PERSONALITY_PAIRS, personalityLetter, opposedPersonality,
     facilityDisplayRank, ELECTRIC_FACILITY_POWER, POWER_GRID,
-} from './facility-config.js?v=power-size1';
+} from './facility-config.js?v=rv14-rv20-facility-counts-power1';
+import { allocateTurnFacilities, redistributeTurnFacilityRows } from './turn-jobs.js';
 import { createShareUrl, readShareHash, urlWithoutShare } from './share-config.js';
 import { sharedFacilityUtilization, sharedPhysicalCount, theoreticalUtilization } from './utilization.js?v=2';
 import { wholeFloor } from './numbers.js?v=1';
@@ -373,6 +377,7 @@ function getPersistedFieldIds() {
         'resource-detector-level', 'crafting-module-level',
         'rate-unit', 'season-on', 'layout-sim-on',
         'food-self-sufficient', 'food-aniimo-count',
+        'season-currency-per-day',
         'aniimo-best', 'aniimo-minimum', 'aniimo-custom'
     ];
 }
@@ -1198,6 +1203,12 @@ function tripsPerUnit(step) {
 // Whether a crop needs a growing environment: grown without one, a building's temperature
 // would change it. Crops that need none grow the same anywhere.
 const needsEnvironment = item => !!recipeIndex.find(r => r.name === item)?.environment;
+const takesTurns = step => {
+    const recipe = recipeIndex.find(r => r.name === step.item_name);
+    return !lastPlan?.dedicated_level_up_facilities
+        && step.status === 'producing'
+        && !!(recipe?.turns || planContext?.dailyOrders && recipe?.ingredients?.length);
+};
 
 const PRIMARY_LAYOUT_FACILITIES = new Set([
     'Mine', 'Well', 'Tidewhisper Sandcastle', 'Dewy House', 'Nimbus Bed',
@@ -1314,32 +1325,31 @@ function homelandPieces(plan, input) {
 
     // Recipes taking turns on the same units (the Bench's and Kiln's tiers) share them: as many
     // units as their busy time together needs, each running every tier in turn at its share.
-    const takesTurns = step => {
+    const sharesHere = step => {
         const recipe = recipeIndex.find(r => r.name === step.item_name);
         return !plan.dedicated_level_up_facilities
             && step.status === 'producing'
             && !!(recipe?.turns || planContext?.dailyOrders && recipe?.ingredients?.length);
     };
-    const turnGroups = new Map();
-    steps.filter(takesTurns).forEach(step => turnGroups.set(step.facility, [...(turnGroups.get(step.facility) || []), step]));
-    turnGroups.forEach((rows, facility) => {
+    // For every facility type, recipes allowed to take turns share a unit only when there are not
+    // enough owned units to give each recipe its own. No facility names are special-cased here.
+    const turnAllocations = allocateTurnFacilities(steps, facility => tierCount(input.facilities[facility]), sharesHere);
+    turnAllocations.forEach((allocations, facility) => {
         const footprint = FACILITY_FOOTPRINTS[facility];
         if (!footprint) {
             unplaced.add(facility);
             return;
         }
-        const busy = rows.reduce((sum, r) => sum + (r.busy_units ?? r.facility_count), 0);
-        const n = Math.max(1, Math.ceil(busy - 1e-6));
-        const jobs = rows.filter(r => r.cycle_time > 0).map(r => ({ item: r.item_name, cycle: r.cycle_time, rate: (r.busy_units ?? r.facility_count) / r.cycle_time / n }));
-        const weight = jobs.reduce((sum, j) => sum + j.rate * 3600, 0);
-        for (let i = 0; i < n; i++) {
-            pieces.push({ members: [{ x: 0, y: 0, w: footprint[0], h: footprint[1], weight, jobs, cycle: jobs[0]?.cycle, facility, crop: jobs[0]?.item ?? null, sensitive: false }] });
-        }
-        count(facility, n);
+        allocations.forEach(jobs => {
+            const weight = jobs.reduce((sum, j) => sum + j.rate * 3600, 0);
+            pieces.push({ members: [{ x: 0, y: 0, w: footprint[0], h: footprint[1], weight, jobs: jobs.length ? jobs : undefined, cycle: jobs[0]?.cycle, facility, crop: jobs[0]?.item ?? null, sensitive: false }] });
+        });
+        count(facility, allocations.length);
     });
 
-    // Everything else, one unit at a time; environment crops no map took count here too.
-    steps.filter(step => !takesTurns(step)).forEach(step => {
+    // Everything else, one unit at a time; environment crops no map took count here too. Rows for
+    // a turn facility are already represented above, including its idle row and physical units.
+    steps.filter(step => !turnAllocations.has(step.facility)).forEach(step => {
         let n = step.facility_count;
         if (step.environment && step.status === 'producing') {
             const key = `${step.facility}|${step.item_name}`;
@@ -1932,7 +1942,10 @@ function showSimClock(seconds) {
     const hours = Math.floor(minutes / 60) % 24;
     const text = `${days ? `${days}d ` : ''}${hours}h ${String(minutes % 60).padStart(2, '0')}m`;
     const clock = document.getElementById('layout-clock');
-    if (clock.textContent !== text) clock.textContent = text;
+    if (clock.dataset.sourceText !== text) {
+        clock.dataset.sourceText = text;
+        clock.textContent = text;
+    }
 }
 
 // --- Progress card ---------------------------------------------------------------------
@@ -2087,7 +2100,7 @@ function renderRoster() {
                 `<label><input type="radio" name="roster-${i}-${ability}" data-level="${i}|${ability}" value="${l}"${l === level ? ' checked' : ''}> ${l}</label>`).join('')}</span><button type="button" class="roster-x" data-drop="${i}|${ability}" aria-label="Remove ${ability}" title="Remove ${ability}">✕</button></span>`).join('');
         const missing = ABILITIES.map(a => a.name).filter(name => !(name in aniimo.abilities));
         const add = missing.length
-            ? `<select class="roster-add-ability" data-add="${i}" aria-label="Add an ability"><option value="">+ Ability</option>${missing.map(name => `<option>${name}</option>`).join('')}</select>`
+            ? `<select class="roster-add-ability" data-add="${i}" aria-label="Add an ability"><option value="">+ Ability</option>${missing.map(name => `<option value="${name}">${name}</option>`).join('')}</select>`
             : '';
         const personalities = PERSONALITY_PAIRS.map((pair, p) => `<span class="tabs level-picker roster-pair" role="radiogroup" aria-label="${pair.names.join(' or ')}">${pair.names.map((name, k) =>
             `<label title="${name}"><input type="radio" name="roster-${i}-pair-${p}" data-personality="${i}|${p}" value="${name}"${aniimo.personalities[p] === name ? ' checked' : ''}> ${pair.letters[k]}</label>`).join('')}</span>`).join('');
@@ -2254,6 +2267,12 @@ function renderRosterSummary(plan) {
 // where there's no RV level to go by. While it's on, plans may use the season's recipes, bar Recipe
 // Notes the player hasn't unlocked, and say how much Moonray Wheat their seeds use.
 
+// The Moonray Wheat a day the player can spend on seeds, or `null` when blank (no limit).
+function seasonCurrencyPerDay() {
+    const value = document.getElementById('season-currency-per-day').value.trim();
+    return value !== '' && Number(value) >= 0 ? Number(value) : null;
+}
+
 function seasonAvailable() {
     return !isSimpleMode() || selectedHomeLevel() >= SEASON.minHomeLevel;
 }
@@ -2305,17 +2324,32 @@ let skippedRecipes = new Set();
 let recipeIndex = [];
 
 function recipeLabel(recipe) {
-    const translate = window.aniimaxTranslate || (value => value);
     return `${translate(prettyItem(recipe.name))} (${translate(recipe.facility)})`;
 }
+
+function renderRecipeOptions() {
+    document.getElementById('skip-options').innerHTML =
+        recipeIndex.map(r => `<option value="${escapeText(recipeLabel(r))}"></option>`).join('');
+}
+
+document.addEventListener('aniimax-language-change', () => {
+    const input = document.getElementById('skip-input');
+    const options = document.getElementById('skip-options');
+    const selected = Array.from(options.options)
+        .findIndex(option => option.value.toLowerCase() === input.value.trim().toLowerCase());
+    renderRecipeOptions();
+    if (selected >= 0) {
+        input.value = options.options[selected].value;
+        input.setCustomValidity('');
+    }
+});
 
 async function loadRecipeIndex() {
     try {
         recipeIndex = JSON.parse(await callWorker('get_all_items'))
             .map(r => ({ name: r.name, facility: r.facility, facilityLevel: r.facility_level, cost: r.cost || 0, seasonSeedCost: r.season_seed_cost || 0, environment: r.environment || null, jobs: r.jobs || [], ingredients: r.raw_materials || [], amounts: r.required_amount || [], yieldAmount: r.yield_amount || 1, byproduct: r.byproduct_item || null, byproductAmount: r.byproduct?.[1] || 0, sellCurrency: r.sell_currency, turns: r.sell_currency === 'none' }))
             .sort((a, b) => a.facility.localeCompare(b.facility) || a.name.localeCompare(b.name));
-        document.getElementById('skip-options').innerHTML =
-            recipeIndex.map(r => `<option value="${recipeLabel(r)}"></option>`).join('');
+        renderRecipeOptions();
         renderDailyOrders();
         renderSkippedRecipes();
         // A plan can finish before this reference list on a very fast click. Refresh its display
@@ -2364,7 +2398,7 @@ function addSkipFromInput() {
         if (partial.length === 1) match = partial[0];
     }
     if (!match) {
-        input.setCustomValidity('Pick a recipe from the list.');
+        input.setCustomValidity(translate('Pick a recipe from the list.'));
         input.reportValidity();
         return;
     }
@@ -3106,7 +3140,7 @@ function renderSeedTable(plan) {
     const rows = (plan.coin_items || [])
         .filter(s => (s.facility === 'Farmland' || s.facility === 'Woodland') && s.status === 'producing' && s.cycle_time > 0)
         .map(s => {
-            const perSecond = s.facility_count / s.cycle_time;
+            const perSecond = (s.busy_units ?? s.facility_count) / s.cycle_time;
             const recipe = recipeIndex.find(r => r.name === s.item_name);
             const cost = recipe?.cost || 0;
             // Whole seeds when counting to the level-up.
@@ -3201,6 +3235,7 @@ function getPlanInputValues() {
             season: seasonActive(),
             food_energy_per_second: foodEnergy,
             dedicated_level_up_facilities: !isDailyOrdersStrategy(),
+            season_currency_per_day: seasonCurrencyPerDay(),
             facilities,
             modules
         };
@@ -3231,6 +3266,7 @@ function getPlanInputValues() {
         season: seasonActive(),
         food_energy_per_second: foodEnergy,
         dedicated_level_up_facilities: !isDailyOrdersStrategy(),
+        season_currency_per_day: seasonCurrencyPerDay(),
         facilities,
         modules
     };
@@ -3272,7 +3308,7 @@ function floatOrDefault(value, fallback) {
 
 // Format number with commas
 function formatNumber(num) {
-    return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    return num.toLocaleString(currentLocale(), { maximumFractionDigits: 2 });
 }
 
 // A rate at the chosen unit: a whole number once it's big enough to read that way, otherwise two
@@ -3352,7 +3388,7 @@ function renderProductBreakdown(goalResult) {
         row.innerHTML = `
             <td>${prettyItem(p.item_name)}</td>
             <td>${p.facility}</td>
-            <td>${wholeAmount.toLocaleString()}</td>
+            <td>${wholeAmount.toLocaleString(currentLocale())}</td>
             <td>${formatRate(p.rate_per_second * multiplier)}</td>
             <td>${formatNumber(worth)}</td>
             ${pointsCell(wholeAmount * (pointsEach.get(p.item_name) || 0))}
@@ -3366,7 +3402,7 @@ function renderProductBreakdown(goalResult) {
         row.innerHTML = `
             <td>${name} <span class="hint small">(bonus)</span></td>
             <td>&mdash;</td>
-            <td>${wholeFloor(amount).toLocaleString()}</td>
+            <td>${wholeFloor(amount).toLocaleString(currentLocale())}</td>
             <td>&mdash;</td>
             <td>not sold</td>
             ${pointsCell(0)}
@@ -3394,9 +3430,9 @@ function renderSeedsNeeded(goalResult) {
         <tr>
             <td>${prettyItem(r.item_name)}</td>
             <td>${r.facility}</td>
-            <td>${r.facility_count.toLocaleString()}</td>
-            <td>${r.seeds_per_plot.toLocaleString()}</td>
-            <td>${r.total_seeds.toLocaleString()}</td>
+            <td>${r.facility_count.toLocaleString(currentLocale())}</td>
+            <td>${r.seeds_per_plot.toLocaleString(currentLocale())}</td>
+            <td>${r.total_seeds.toLocaleString(currentLocale())}</td>
         </tr>
     `).join('');
 }
@@ -4124,7 +4160,11 @@ function renderEnvironmentDiagram(layout, mode, building, rows = [], unit = null
 // else falls back to the original per-facility-category grouping (FACILITY_CATEGORIES).
 function renderFacilityPlan(plan) {
     const container = document.getElementById('facility-plan-container');
-    const steps = plan.coin_items || [];
+    const steps = redistributeTurnFacilityRows(
+        plan.coin_items || [],
+        facility => tierCount(lastPlanInput?.facilities?.[facility]),
+        takesTurns
+    );
 
     if (steps.length === 0) {
         container.innerHTML = '<p class="hint">Nothing profitable to produce with the current facilities.</p>';
@@ -4850,7 +4890,7 @@ window.closeFacilitiesOnBackdrop = function(event) {
 }
 
 // Event listeners
-document.addEventListener('DOMContentLoaded', async () => {
+async function initApp() {
     let sharedData = null;
     try {
         sharedData = await readShareHash(window.location.hash);
@@ -4903,9 +4943,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const { name, value, checked } = event.target;
         const unheardOf = event.target.dataset?.confirm;
         if (unheardOf && checked) {
-            const ok = window.confirm(
+            const ok = window.confirm(translate(
                 `No level-${value} ${unheardOf} Aniimo is known in the game yet. Plan as though you have one?`
-            );
+            ));
             if (!ok) {
                 showAniimoSetup();
                 return;
@@ -4940,7 +4980,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     });
-});
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initApp);
+else initApp();
 
 // --- Hover tips --------------------------------------------------------------------------
 // One card for hover tips, shown at once instead of after the browser's delay. Diagram pieces
@@ -4965,7 +5008,7 @@ function tipAttrs(title, { detail = '', stats = '', color = '' } = {}) {
 function showTip(el) {
     // A title set since the last hover replaces the one kept aside.
     if (el.hasAttribute('title')) {
-        const text = el.getAttribute('title');
+        const text = sourceAttribute(el, 'title');
         el.removeAttribute('title');
         el.dataset.tipText = text;
         if (!el.hasAttribute('aria-label')) el.setAttribute('aria-description', text);
@@ -4990,7 +5033,7 @@ function showTip(el) {
         if (el.dataset.tipDetail) line('tip-detail', el.dataset.tipDetail);
         if (el.dataset.tipStats) line('tip-stats', el.dataset.tipStats);
     } else {
-        line('tip-text', el.dataset.tipText);
+        line('tip-text', translate(el.dataset.tipText));
     }
     tipTarget = el;
     tipCard.hidden = false;
@@ -5000,6 +5043,8 @@ function hideTip() {
     tipTarget = null;
     tipCard.hidden = true;
 }
+
+document.addEventListener('aniimax-language-change', hideTip);
 
 // Above the point, centered on it and kept on screen; below it where there's no room above.
 function placeTip(x, y, below = y) {

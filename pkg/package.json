@@ -2,7 +2,7 @@
   "name": "aniimax",
   "type": "module",
   "description": "Production path optimizer for Aniimo Homeland",
-  "version": "0.16.0",
+  "version": "0.17.1",
   "license": "MIT",
   "repository": {
     "type": "git",
