@@ -764,6 +764,10 @@ pub struct JsPlanInput {
     /// tiers can run unattended. The worker retries with sharing when the owned count is too low.
     #[serde(default = "default_true")]
     pub dedicated_level_up_facilities: bool,
+    /// During the season, the most of its currency (Moonray Wheat) a day the player can spend on
+    /// seeds; `None` for no limit.
+    #[serde(default)]
+    pub season_currency_per_day: Option<f64>,
 }
 
 /// The player's Aniimo, and what the page knows of the facilities they work (see
@@ -921,7 +925,7 @@ fn aniimo_tasks_for(
     let Some(cycle_time) = step.cycle_time.filter(|t| *t > 0.0) else {
         return Vec::new();
     };
-    let harvests_per_second = step.facility_count as f64 / cycle_time;
+    let harvests_per_second = step.busy_units.unwrap_or(step.facility_count as f64) / cycle_time;
     let mut tasks: Vec<JsAniimoTask> = Vec::new();
     for job in grower_steps.get(item) {
         let level = job.min_level;
@@ -1688,7 +1692,11 @@ impl PreparedInput {
         };
         let mut items = get_embedded_items();
         if input.season {
-            items.extend(embedded_season_items());
+            let mut season = embedded_season_items();
+            for terms in season.iter_mut().filter_map(|item| item.season.as_mut()) {
+                terms.currency_per_day = input.season_currency_per_day.map(|budget| budget.max(0.0));
+            }
+            items.extend(season);
             crate::data::apply_food_energy(&mut items, include_str!("../data/food_energy.csv"))
                 .expect("embedded food_energy.csv is valid");
         }
