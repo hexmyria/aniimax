@@ -53,6 +53,7 @@ assert.ok(handlerStart >= 0 && handlerEnd > handlerStart);
 const handlerSource = appSource.slice(handlerStart, handlerEnd);
 assert.match(handlerSource, /renderDailyOrders\(\)/);
 assert.doesNotMatch(appSource, /aniimaxTranslate/);
+assert.doesNotMatch(appSource, /\$\{localized\} \/ \$\{english\}/);
 const englishRecipe = 'Wheat (Farmland)';
 const russianRecipe = 'Пшеница (Пахотная земля)';
 for (const [before, after, typed] of [
