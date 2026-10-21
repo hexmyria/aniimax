@@ -2338,6 +2338,7 @@ document.addEventListener('aniimax-language-change', () => {
     const selected = Array.from(options.options)
         .findIndex(option => option.value.toLowerCase() === input.value.trim().toLowerCase());
     renderRecipeOptions();
+    renderDailyOrders();
     if (selected >= 0) {
         input.value = options.options[selected].value;
         input.setCustomValidity('');
@@ -2756,7 +2757,6 @@ function dailyOrderRecipes() {
 
 function dailyOrderItemLabel(recipe) {
     if (!recipe) return '';
-    const translate = window.aniimaxTranslate || (value => value);
     const english = prettyItem(recipe.name);
     const localized = translate(english);
     const item = localized === english ? english : `${localized} / ${english}`;
@@ -2770,7 +2770,7 @@ function dailyOrderRecipeFromText(value) {
         dailyOrderItemLabel(recipe).toLocaleLowerCase() === text
         || recipe.name.toLocaleLowerCase() === text
         || prettyItem(recipe.name).toLocaleLowerCase() === text
-        || (window.aniimaxTranslate?.(prettyItem(recipe.name)) || '').toLocaleLowerCase() === text
+        || translate(prettyItem(recipe.name)).toLocaleLowerCase() === text
     ) || null;
 }
 
@@ -2849,7 +2849,7 @@ function attachDailyOrderHandlers() {
             const row = e.target.closest('[data-order-index]');
             const recipe = dailyOrderRecipeFromText(e.target.value);
             if (!recipe && e.target.value.trim()) {
-                e.target.setCustomValidity((window.aniimaxTranslate || (value => value))('Pick an order item from the list.'));
+                e.target.setCustomValidity(translate('Pick an order item from the list.'));
                 e.target.reportValidity();
                 return;
             }

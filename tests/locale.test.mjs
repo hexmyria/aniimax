@@ -51,6 +51,8 @@ const handlerStart = appSource.indexOf("document.addEventListener('aniimax-langu
 const handlerEnd = appSource.indexOf('async function loadRecipeIndex()', handlerStart);
 assert.ok(handlerStart >= 0 && handlerEnd > handlerStart);
 const handlerSource = appSource.slice(handlerStart, handlerEnd);
+assert.match(handlerSource, /renderDailyOrders\(\)/);
+assert.doesNotMatch(appSource, /aniimaxTranslate/);
 const englishRecipe = 'Wheat (Farmland)';
 const russianRecipe = 'Пшеница (Пахотная земля)';
 for (const [before, after, typed] of [
@@ -67,6 +69,7 @@ for (const [before, after, typed] of [
             getElementById: id => id === 'skip-input' ? input : options,
         },
         renderRecipeOptions: () => { options.options = [{ value: after }]; },
+        renderDailyOrders: () => {},
     });
     languageChanged();
     assert.equal(input.value, typed === before ? after : typed);
