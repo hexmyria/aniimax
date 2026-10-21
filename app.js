@@ -2759,8 +2759,7 @@ function dailyOrderItemLabel(recipe) {
     if (!recipe) return '';
     const english = prettyItem(recipe.name);
     const localized = translate(english);
-    const item = localized === english ? english : `${localized} / ${english}`;
-    return `${item} — ${translate(recipe.facility)}`;
+    return `${localized} — ${translate(recipe.facility)}`;
 }
 
 function dailyOrderRecipeFromText(value) {
